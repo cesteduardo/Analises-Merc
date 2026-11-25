@@ -116,9 +116,17 @@
   function calibTexto(a) {
     var n = function (corte) { return HZ.filter(function (z) { return bt(corte, a, z).classe === "na_meta"; }).length; };
     var f = function (corte) { return HZ.filter(function (z) { return bt(corte, a, z).classe === "na_meta_fraca"; }).length; };
-    return "Backtest por corte: 2018, " + n("2018") + " de 4 na meta com confiança (" + f("2018") + " na faixa sem poder estatístico); 2021, " + n("2021") + " de 4 (" + f("2021") + "). " + choquesTexto(a);
+    var t = function (corte) { return n(corte) + " de 4 na meta com intervalo estreito e " + f(corte) + " na faixa sem poder estatístico"; };
+    return "Backtest por corte: 2018, " + t("2018") + "; 2021, " + t("2021") + ". " + choquesTexto(a);
   }
 
+  function notaBtcbrl() {
+    var hb = P.base.btcbrl.horizontes["365"], hu = P.base.btcusd.horizontes["365"];
+    var pior = hb.P50.var_pct < hu.P50.var_pct;
+    return "Calculado em cada trajetória como BTC/USD × USD/BRL. O dólar amortece a queda em reais quando sobe junto com a queda do BTC; na base, a mediana do dólar " +
+      (P.base.usdbrl.horizontes["365"].P50.var_pct < 0 ? "cai" : "sobe") + ", e a mediana do BTC/BRL (" + pct(hb.P50.var_pct, 0) + ") fica " +
+      (pior ? "um pouco pior que" : "melhor que") + " a do BTC/USD (" + pct(hu.P50.var_pct, 0) + ").";
+  }
   function hero() {
     el("hero-data").innerHTML = '<span class="passo">1</span>Resumo · dados até ' + data(P.data_base) + " · " + F0.format(P.modelo.n_trajetorias) + " trajetórias";
     el("hero-lead").textContent = "Para cada ativo, o número em vermelho é o pior caso plausível: o nível que só 1 em cada 100 trajetórias simuladas ultrapassa no fim de 365 dias, na direção ruim (dólar mais caro, bitcoin mais barato). Abaixo dele, a mediana e as faixas intermediárias.";
@@ -137,7 +145,7 @@
         '<div><dt>P5 · 1 em 20</dt><dd class="n">' + moeda(a, h.P5.nivel, true) + '<small>' + pct(h.P5.var_pct, 0) + '</small></dd></div></dl>' +
         '<div class="ativo__extra"><p>Pior estresse para ' + NOMES[a] + ': ' + esc(pe.nome) + ' (' + esc(pe.periodo) + '), mediana de ' + moeda(a, pv.nivel, true) + ' (' + pct(pv.var_pct, 0) + ') em 365 dias.</p>' +
         (a === "usdbrl" ? '<p>A mediana cai porque o juro real alto favorece o real (deriva de ' + pct(P.modelo.deriva_fx.deriva_anual_usdbrl_pct) + ' ao ano, escolhida olhando o backtest). Sem essa deriva: mediana de ' + moeda(a, P.pior_caso.usdbrl_sem_deriva.P50, true) + ' e P1 de ' + moeda(a, P.pior_caso.usdbrl_sem_deriva.P1, true) + '.</p>' : "") +
-        (a === "btcbrl" ? '<p>Calculado em cada trajetória como BTC/USD × USD/BRL: a alta do dólar amortece a queda em reais.</p>' : "") +
+        (a === "btcbrl" ? "<p>" + notaBtcbrl() + "</p>" : "") +
         '<p>' + esc(calibTexto(a)) + '</p></div>' +
         '<button type="button" class="ativo__ver" data-sel="' + a + '">' + (a === estado.ativo ? "Exibido nas seções abaixo" : "Ver " + NOMES[a] + " nas seções abaixo") + '</button>' +
         '</article>';
@@ -159,7 +167,7 @@
     var at = P.gatilhos.filter(function (g) { return g.status === "atencao"; }).map(function (g) { return g.nome; });
     var c = contagem();
     el("estado").innerHTML =
-      '<li data-s="fora"><i aria-hidden="true"></i><span><b>Especificação ainda não cumprida.</b> Por corte, só ' + c.corte + " de 24 combinações estão na meta de 8% a 12% com confiança estatística; " + c.fraca + " ficam na faixa sem poder estatístico, " + c.inc + " são inconclusivas e " + c.fora + " ficam fora. O P5 não conteve " + c.choques + " (seção 6).</span></li>" +
+      '<li data-s="fora"><i aria-hidden="true"></i><span><b>Especificação ainda não cumprida.</b> Por corte, só ' + c.corte + " de 24 combinações estão na meta de 8% a 12% com intervalo estreito (menos de 15 p.p.); " + c.fraca + " ficam na faixa sem poder estatístico, " + c.inc + " são inconclusivas e " + c.fora + " ficam fora. O P5 não conteve " + c.choques + " (seção 6).</span></li>" +
       '<li data-s="' + (al.length ? "alerta" : "normal") + '"><i aria-hidden="true"></i><span><b>' + (al.length ? al.length + " gatilhos em alerta:" : "Nenhum gatilho em alerta.") + "</b> " + esc(al.join(", ")) + (at.length ? ". Em atenção: " + esc(at.join(", ")) : "") + ". Eles não alteram os números abaixo (seção 5).</span></li>";
   }
 
@@ -308,7 +316,7 @@
     marcar(estado.dia || 252);
 
     el("legenda").innerHTML =
-      '<span><i style="background:var(--red);height:3px"></i>' + (D.c ? "P1 do estresse (fora do plausível)" : "P1, pior caso plausível") + '</span>' +
+      '<span><i style="background:var(--red);height:3px"></i>' + (D.c ? rotuloP1(D.c, estado.ativo) : "P1, pior caso plausível") + '</span>' +
       '<span><i style="background:var(--band-3)"></i>P5 a P1</span>' +
       '<span><i style="background:var(--band-2)"></i>P10 a P5</span>' +
       '<span><i style="background:var(--band-1)"></i>P50 a P10</span>' +
@@ -331,6 +339,12 @@
   }
 
   /* compara um estresse com a base no mesmo ativo, pelos números de 365 dias */
+  function rotuloP1(c, a) {
+    var p1s = ruimV(a, c.ativos[a].horizontes["365"].P1.var_pct);
+    if (p1s > ruimV(a, P.ancoras[a].var_pct)) return "P1 do estresse (além do pior histórico, fora do plausível)";
+    if (p1s < ruimV(a, P.base[a].horizontes["365"].P1.var_pct)) return "P1 do estresse (mais brando que o P1 da base)";
+    return "P1 do estresse (dentro do pior histórico)";
+  }
   function ruimV(a, v) { return a === "usdbrl" ? v : -v; }
   function comparaBase(c, a) {
     var hs = c.ativos[a].horizontes["365"], hb = P.base[a].horizontes["365"];
@@ -338,8 +352,8 @@
     var dds = c.ativos[a].drawdown["365"].P50, ddb = P.base[a].drawdown["365"].P50;
     var anc = ruimV(a, P.ancoras[a].var_pct), p1s = ruimV(a, hs.P1.var_pct);
     var t;
-    if (p5s < p5b && dds < ddb) t = "Neste ativo, o estresse é mais brando que a base: P5 de " + pct(hs.P5.var_pct, 0) + " contra " + pct(hb.P5.var_pct, 0) + " na base, e queda mediana no caminho de " + pct(-dds, 0) + " contra " + pct(-ddb, 0) + ".";
-    else if (p5s < p5b) t = "A queda mediana no caminho (" + pct(-dds, 0) + ") é maior que a da base (" + pct(-ddb, 0) + "), mas o P5 de 365 dias (" + pct(hs.P5.var_pct, 0) + ") é mais brando que o da base (" + pct(hb.P5.var_pct, 0) + ").";
+    if (p5s < p5b && dds < ddb) t = "Neste ativo, o estresse é mais brando que a base: P5 de " + pct(hs.P5.var_pct, 0) + " contra " + pct(hb.P5.var_pct, 0) + " na base, e queda mediana desde o pico de " + pct(-dds, 0) + " contra " + pct(-ddb, 0) + ".";
+    else if (p5s < p5b) t = "A queda mediana desde o pico (" + pct(-dds, 0) + ") é maior que a da base (" + pct(-ddb, 0) + "), mas o P5 de 365 dias (" + pct(hs.P5.var_pct, 0) + ") é mais brando que o da base (" + pct(hb.P5.var_pct, 0) + ").";
     else t = "Neste ativo, o estresse é mais severo que a base: P5 de " + pct(hs.P5.var_pct, 0) + " contra " + pct(hb.P5.var_pct, 0) + ".";
     t += p1s > anc ? " O P1 do estresse (" + pct(hs.P1.var_pct, 0) + ") passa do pior movimento histórico de 12 meses (" + pct(P.ancoras[a].var_pct, 0) + ") e fica fora do que o painel chama de plausível."
       : " O P1 do estresse (" + pct(hs.P1.var_pct, 0) + ") não chega ao pior movimento histórico de 12 meses (" + pct(P.ancoras[a].var_pct, 0) + ").";
@@ -405,8 +419,8 @@
   var SIT = { presente: "Presente hoje", proxima: "Próxima", distante: "Distante", sem_dado: "Sem dado" };
 
   function pontoRot(c, a) {
-    if (c.tipo !== "reconstruído") return "No pior ponto dos análogos";
-    return a === "btcbrl" ? "Combinação dos dois piores pontos" : "No pior ponto do episódio";
+    if (c.tipo !== "reconstruído") return "Pior nível contra o início (média dos análogos)";
+    return a === "btcbrl" ? "Combinação dos dois piores níveis" : "Pior nível contra o início";
   }
   function pontoSub(c, a) {
     var pr = c.premissas, po = pr.pior_observado;
@@ -415,19 +429,28 @@
     return data(po[a].data) + ", dia útil " + po[a].dia;
   }
 
+  function avisoAlvo(c, a) {
+    var dt = c.premissas.drawdown_datas, po = c.premissas.pior_observado;
+    if (!dt || !dt[a]) return "";
+    var d = dt[a], hd = c.premissas.drawdown_historico[a];
+    if (a === "btcbrl") return d.vale !== po.btcbrl.data ? '<p class="cen__outros">No episódio, a queda desde o pico (' + pct(-hd, 0) + ", de " + data(d.pico) + " a " + data(d.vale) + ") difere do pior nível contra o início (" + pct(po.btcbrl.pct, 0) + ").</p>" : "";
+    if (!d.depois_da_parada) return "";
+    return '<p class="cen__outros">A queda-alvo de ' + pct(-hd, 0) + " aconteceu de " + data(d.pico) + " a " + data(d.vale) + ", depois do ponto de parada (" + data(po[a].data) + "). No cenário, ela vem só do ruído do GARCH.</p>";
+  }
   function cenarios() {
     var a = estado.ativo;
     el("est-sub").innerHTML = "Três episódios reais e um cenário construído para 2026–27, aplicados aos preços de hoje, do mais severo ao menos severo em " + NOMES[a] + ". A queda mediana de cada estresse é igual à que o episódio teve de fato, e nenhuma recuperação é assumida." +
       '<details class="mais"><summary>Como os estresses são montados</summary><ul>' +
-      "<li>Cada ativo segue a própria trajetória do episódio até o próprio pior ponto e para ali. Quando os dois piores pontos não foram no mesmo dia, ficam somados: premissa pessimista deliberada.</li>" +
-      "<li>A trajetória histórica é escalada e somada ao ruído do GARCH-t para que a queda mediana no caminho reproduza a do episódio, sem contar a volatilidade duas vezes. BTC/BRL não é calibrado: sai do produto das duas trajetórias.</li>" +
+      "<li>Cada ativo segue a própria trajetória do episódio até o próprio pior nível contra o início e para ali, sem recuperação. Isso é pessimista para USD/BRL e para BTC/USD, cada um isolado. No BTC/BRL, que pela especificação é o produto dos dois, a alta do dólar compensa parte da queda do BTC: a combinação pode ficar mais branda que o pior BTC/BRL observado, e cada cartão mostra os dois.</li>" +
+      "<li>Duas medidas diferentes: a <b>queda desde o pico</b> (o maior recuo a partir de um topo, usada na calibração) e o <b>pior nível contra o início</b> (onde a trajetória para). Elas podem cair em datas diferentes; quando a queda-alvo vem depois do ponto de parada, o cartão avisa.</li>" +
+      "<li>A trajetória histórica é escalada e somada ao ruído do GARCH-t para que a queda mediana desde o pico reproduza a do episódio, sem contar a volatilidade duas vezes. BTC/BRL não é calibrado: sai do produto das duas trajetórias.</li>" +
       "<li>“O que precisaria acontecer” lista só as condições que foram gatilho no episódio e compara com hoje pelas regras da seção 5: no episódio, os 63 dias úteis a partir do início; hoje, os 63 dias úteis até a data-base. Fed Funds e dívida: 12 meses.</li></ul></details>";
     el("cenarios").innerHTML = porSeveridade(a).map(function (c, i) {
       var pr = c.premissas, h = c.ativos[a].horizontes["365"], dd = c.ativos[a].drawdown["365"];
       var hd = pr.drawdown_historico[a];
       var foco = '<dl class="cen__foco">' +
         '<div><dt>Mediana em 365 dias</dt><dd class="n">' + moeda(a, h.P50.nivel, true) + "<small>" + varC(a, h.P50.var_pct, 0) + "</small></dd></div>" +
-        '<div><dt>Queda mediana no caminho</dt><dd class="n ruim">' + pct(-dd.P50, 0) + "<small>" + (hd ? "no episódio: " + pct(-hd, 0) : "sem episódio próprio") + "</small></dd></div>" +
+        '<div><dt>Queda mediana desde o pico</dt><dd class="n ruim">' + pct(-dd.P50, 0) + "<small>" + (hd ? "no episódio: " + pct(-hd, 0) : "sem episódio próprio") + "</small></dd></div>" +
         '<div><dt>P5 em 365 dias</dt><dd class="n">' + moeda(a, h.P5.nivel, true) + "<small>" + varC(a, h.P5.var_pct, 0) + "</small></dd></div>" +
         '<div><dt>' + pontoRot(c, a) + '</dt><dd class="n">' + varC(a, pr.choque_no_pior_pct[a], 0) + "<small>" + pontoSub(c, a) + "</small></dd></div></dl>";
       var outros = ATIVOS.filter(function (x) { return x !== a; }).map(function (x) {
@@ -445,19 +468,21 @@
       var real = c.historico_real_pct && c.historico_real_pct["365"];
       var prem = [], po = pr.pior_observado;
       prem.push(c.data_inicio_real ? "Início do episódio: " + data(c.data_inicio_real) + ". Pior ponto do câmbio em " + data(po.usdbrl.data) + " (dia útil " + po.usdbrl.dia + ", dólar " + pct(po.usdbrl.pct, 0) + "); do BTC em " + data(po.btcusd.data) + " (dia útil " + po.btcusd.dia + ", " + pct(po.btcusd.pct, 0) + "). Cada ativo segue a própria trajetória até o próprio pior ponto e fica parado depois. " +
-        (po.usdbrl.dia !== po.btcusd.dia ? "Como os dois piores pontos não foram no mesmo dia, a combinação é mais severa que qualquer dia do episódio: o pior BTC/BRL observado foi " + pct(po.btcbrl.pct, 0) + " em " + data(po.btcbrl.data) + ", contra " + pct(pr.choque_no_pior_pct.btcbrl, 0) + " na combinação. Essa é uma premissa pessimista deliberada." : "") :
+        (po.usdbrl.dia !== po.btcusd.dia ? "Os dois piores níveis não foram no mesmo dia. Somá-los é pessimista para USD/BRL e BTC/USD isolados; no BTC/BRL, " +
+          (pr.choque_no_pior_pct.btcbrl > po.btcbrl.pct ? "a alta do dólar compensa parte da queda e a combinação (" + pct(pr.choque_no_pior_pct.btcbrl, 0) + ") fica mais branda que o pior BTC/BRL observado (" + pct(po.btcbrl.pct, 0) + " em " + data(po.btcbrl.data) + ")."
+            : "a combinação (" + pct(pr.choque_no_pior_pct.btcbrl, 0) + ") fica mais severa que o pior BTC/BRL observado (" + pct(po.btcbrl.pct, 0) + " em " + data(po.btcbrl.data) + ").") : "") :
         "Análogos com peso de 1/3 cada: " + c.analogos.map(data).join(", ") + ". O câmbio segue a média diária dos três até o pior ponto da média (dia útil " + pr.dias_ate_pior + "). O BTC não tem trajetória própria.");
       prem.push("Mediana calibrada sem dupla contagem: a trajetória histórica entra multiplicada por " + F2.format(pr.m_fx) + " no câmbio" + (c.tipo === "reconstruído" ? " e " + F2.format(pr.m_btc) + " no BTC" : "") +
-        ", somada ao ruído do GARCH-t (escala " + F2.format(pr.lambda_fx) + " no câmbio e " + F2.format(pr.lambda_btc) + " no BTC), para que a queda mediana no caminho seja igual à do episódio" + (c.tipo === "construído" ? " (média dos análogos)" : "") + "." +
+        ", somada ao ruído do GARCH-t (escala " + F2.format(pr.lambda_fx) + " no câmbio e " + F2.format(pr.lambda_btc) + " no BTC), para que a queda mediana desde o pico seja igual à do episódio" + (c.tipo === "construído" ? " (média dos análogos)" : "") + "." +
         (pr.m_btc === 0 && c.tipo === "reconstruído" ? " No BTC, a volatilidade sozinha já passava da queda do episódio; por isso a trajetória sai (multiplicador 0) e a escala do ruído é reduzida." : ""));
       prem.push("Volatilidade de partida: a maior entre a condicional de hoje e a média de longo prazo, " + F0.format(pr.vol_inicial_fx * 100) + "% a.a. no câmbio e " + F0.format(pr.vol_inicial_btc * 100) + "% a.a. no BTC (hoje: " + F0.format(pr.vol_atual_fx * 100) + "% e " + F0.format(pr.vol_atual_btc * 100) + "%). A camada de crise da base não entra nos estresses.");
       prem.push("Correlação real × BTC: " + (pr.rho_episodio !== null ? F2.format(pr.rho_episodio) + " no episódio; " : "sem episódio, parte da de hoje (" + F2.format(pr.rho_hoje) + "); ") + "usada " + F2.format(pr.rho_usado) + ", a maior entre essa e o percentil 95 da janela de 63 dias (" + F2.format(pr.rho_p95_63d) + "), com cópula t de " + F0.format(pr.nu_copula) + " graus de liberdade.");
       if (real) prem.push("O que aconteceu de fato em 365 dias: USD/BRL " + pct(real.usdbrl) + ", BTC/USD " + pct(real.btcusd) + ", BTC/BRL " + pct(real.btcbrl) + ". A recuperação depois do pior ponto não entra no cenário.");
-      if (a === "btcbrl") prem.push("BTC/BRL não é calibrado: sai do produto das duas trajetórias simuladas. Por isso a queda mediana no caminho pode diferir da observada no episódio.");
+      if (a === "btcbrl") prem.push("BTC/BRL não é calibrado: sai do produto das duas trajetórias simuladas. Por isso a queda mediana desde o pico pode diferir da observada no episódio.");
       return '<article class="cen">' +
         '<div class="cen__topo"><span class="cen__ordem">' + (i + 1) + "º para " + NOMES[a] + '</span><span class="cen__tipo">' + esc(c.tipo) + "</span></div>" +
         "<h3>" + esc(c.nome) + " (" + esc(c.periodo) + ")</h3>" + '<p class="cen__resumo">' + esc(c.resumo) + "</p>" +
-        foco + '<p class="cen__compara' + (maisBrando(c, a) ? " cen__compara--brando" : "") + '">' + esc(comparaBase(c, a)) + "</p>" + '<p class="cen__outros">Mediana em 365 dias dos outros ativos: ' + outros + ".</p>" +
+        foco + avisoAlvo(c, a) + '<p class="cen__compara' + (maisBrando(c, a) ? " cen__compara--brando" : "") + '">' + esc(comparaBase(c, a)) + "</p>" + '<p class="cen__outros">Mediana em 365 dias dos outros ativos: ' + outros + ".</p>" +
         '<h4 class="h3">O que precisaria acontecer</h4>' +
         '<ul class="cond">' + conds + (co.qualitativo ? '<li><span class="cond__nome">Quebras no setor cripto</span><span class="sit" data-s="sem_dado">Sem dado</span><span class="cond__v">' + esc(co.qualitativo) + "</span></li>" : "") + "</ul>" +
         '<details class="mais"><summary>Premissas do cenário</summary><ul>' + prem.map(function (t) { return "<li>" + t + "</li>"; }).join("") + "</ul></details></article>";

@@ -127,6 +127,13 @@ def dd_um(c):
     return float(drawdown_max(np.asarray(c, dtype=float)[None, :])[0])
 
 
+def dd_pico_vale(c):
+    """Índices (no caminho com o 0 inicial) do pico e do vale do drawdown máximo."""
+    lv = np.concatenate([[0.0], np.asarray(c, dtype=float)])
+    j = int(np.argmin(lv - np.maximum.accumulate(lv)))
+    return int(np.argmax(lv[:j + 1])), j
+
+
 def calibrar_estresse(deriva, ruido, alvo, amostra=6000):
     """Ajusta o cenário para que a mediana do drawdown máximo em 365 dias iguale o
     drawdown histórico do episódio, sem dupla contagem.
@@ -319,7 +326,14 @@ def main():
                         "btcusd": {"pct": ub, "data": str(idx[i0 + 1 + kb].date()), "dia": kb + 1},
                         "btcbrl": {"pct": float(np.exp(cbb[kbb]) - 1), "data": str(idx[i0 + 1 + kbb].date()), "dia": kbb + 1}}
             dd_hist = {"usdbrl": alvo_f, "btcusd": alvo_b, "btcbrl": dd_um(cbb)}
+            # quando a queda desde o pico (alvo) não coincide com o pior nível contra o início
+            dd_dt = {}
+            for a_, cam, kst in (("usdbrl", cfh, kf), ("btcusd", cbh, kb), ("btcbrl", cbb, None)):
+                ip, iv = dd_pico_vale(cam)
+                dd_dt[a_] = {"pico": str(idx[i0 + ip].date()), "vale": str(idx[i0 + iv].date()),
+                             "depois_da_parada": bool(kst is not None and iv > kst + 1)}
         else:
+            dd_dt = None
             no_pior = {"usdbrl": float(np.exp(-cfh[T]) - 1), "btcusd": 0.0, "btcbrl": float(np.exp(cfh[T]) - 1)}
             pior_obs = None
             dd_hist = {"usdbrl": alvo_f, "btcusd": None, "btcbrl": None}
@@ -330,7 +344,7 @@ def main():
                 "dias_ate_pior": T + 1, "data_pior": data_pior,
                 "dias_ate_pior_fx": kf + 1, "dias_ate_pior_btc": (kb + 1) if kb is not None else None,
                 "choque_no_pior_pct": no_pior, "pior_observado": pior_obs,
-                "drawdown_historico": dd_hist,
+                "drawdown_historico": dd_hist, "drawdown_datas": dd_dt,
                 "drawdown_mediano_obtido": {"usdbrl": med_f, "btcusd": med_b},
                 "lambda_fx": lam_f, "lambda_btc": lam_b, "m_fx": m_f, "m_btc": m_b,
                 "tendencia_aplicada_pct": {"usdbrl": float(np.exp(-m_f * mf.sum()) - 1), "btcusd": float(np.exp(m_b * mb.sum()) - 1)},
