@@ -13,78 +13,72 @@
 </head>
 <body>
 <!--CONTEUDO-->
-<div class="ambient" aria-hidden="true"></div>
 <a class="skip" href="#conteudo">Pular para o conteúdo</a>
 
 <div class="shell">
   <header class="topbar">
-    <p class="aviso glass label"><span class="aviso__dot" aria-hidden="true"></span>Estudo de risco. Não é recomendação de investimento.</p>
-    <button class="ctrl glass label" id="tema" type="button" aria-label="Alternar tema claro e escuro"><span class="ctrl__icon" aria-hidden="true"></span><span>Tema</span></button>
+    <p class="aviso"><span class="aviso__dot" aria-hidden="true"></span>Estudo de risco. Não é recomendação de investimento.</p>
+    <button class="ctrl glass" id="tema" type="button" aria-label="Alternar tema claro e escuro"><span class="ctrl__icon" aria-hidden="true"></span></button>
   </header>
 
   <main id="conteudo" class="main">
 
-    <!-- 1. Pior caso plausível -->
+    <!-- 1. Resumo -->
     <section class="panel glass hero" aria-labelledby="h-hero">
       <p class="eyebrow" id="hero-data">Carregando dados…</p>
-      <h1 class="heading" id="h-hero">Projeções deliberadamente pessimistas do dólar e do bitcoin, lidas do pior caso plausível para o mediano<span class="dot">.</span></h1>
-      <div class="tiles" id="tiles" aria-live="polite"></div>
-      <p class="note" id="hero-nota"></p>
-      <div class="selo" id="selo"></div>
+      <h1 class="heading" id="h-hero">Quanto pode piorar em um ano, do pior caso plausível à mediana<span class="dot">.</span></h1>
+      <p class="lead" id="hero-lead"></p>
+      <div class="resumo" id="resumo" aria-live="polite"></div>
+      <div class="hero__rodape">
+        <p class="note" id="hero-conjunta"></p>
+        <ul class="estado" id="estado"></ul>
+      </div>
     </section>
 
-    <!-- 2. Leque -->
+    <!-- Seletor de ativo, fixo ao rolar -->
+    <nav class="barra" aria-label="Ativo exibido nas seções abaixo">
+      <div class="seg glass" role="group" aria-label="Ativo">
+        <button class="seg__btn" type="button" data-ativo="usdbrl" aria-pressed="true">USD/BRL</button>
+        <button class="seg__btn" type="button" data-ativo="btcusd" aria-pressed="false">BTC/USD</button>
+        <button class="seg__btn" type="button" data-ativo="btcbrl" aria-pressed="false">BTC/BRL</button>
+      </div>
+    </nav>
+
+    <!-- 2. Cone -->
     <section class="panel glass" aria-labelledby="h-leque">
       <div class="head">
-        <p class="eyebrow">Distribuição em 365 dias</p>
-        <h2 id="h-leque">O cone de risco, com a cauda P1 em destaque</h2>
-        <p class="sub">Cada faixa é uma probabilidade, não uma previsão. A linha vermelha é o P1: só 1 em cada 100 trajetórias simuladas termina pior que ela.</p>
+        <p class="eyebrow"><span class="passo">2</span>Distribuição até 365 dias</p>
+        <h2 id="h-leque">O cone de risco</h2>
+        <p class="sub" id="leque-sub"></p>
       </div>
-      <div class="controles">
-        <div class="seg glass" role="group" aria-label="Ativo" data-grupo="ativo">
-          <button class="seg__btn label" type="button" data-ativo="usdbrl" aria-pressed="true">USD/BRL</button>
-          <button class="seg__btn label" type="button" data-ativo="btcusd" aria-pressed="false">BTC/USD</button>
-          <button class="seg__btn label" type="button" data-ativo="btcbrl" aria-pressed="false">BTC/BRL</button>
-        </div>
-        <label class="select glass label" for="cenario-sel"><span class="sr-only">Distribuição</span>
-          <select id="cenario-sel"></select>
-        </label>
-      </div>
+      <div class="chips" id="dist" role="group" aria-label="Distribuição exibida"></div>
       <div class="leitura" id="leitura" aria-live="polite"></div>
-      <figure class="chart" id="leque-fig">
+      <figure class="chart">
         <div class="chart__svg" id="leque"></div>
         <figcaption class="legenda" id="legenda"></figcaption>
       </figure>
-      <div class="table-wrap">
-        <table class="quantis" id="tabela-quantis"></table>
-      </div>
+      <h3 class="h3">Por horizonte</h3>
+      <div class="horizontes" id="horizontes"></div>
       <p class="note" id="nota-quantis"></p>
     </section>
 
     <!-- 3. Drawdown -->
     <section class="panel glass" aria-labelledby="h-dd">
       <div class="head">
-        <p class="eyebrow">Queda máxima no caminho</p>
-        <h2 id="h-dd">Mapa de calor do drawdown máximo por horizonte</h2>
-        <p class="sub" id="dd-sub">Mesmo quando o ponto final se recupera, o caminho pode cair muito antes. Cada célula mostra a queda máxima desde o pico que 1 em cada 20 trajetórias ultrapassa (P5); abaixo, a mediana.</p>
+        <p class="eyebrow"><span class="passo">3</span>Queda máxima no caminho</p>
+        <h2 id="h-dd">Mapa de calor do drawdown</h2>
+        <p class="sub" id="dd-sub"></p>
       </div>
-      <div class="seg glass" role="group" aria-label="Ativo do mapa" data-grupo="ativo">
-        <button class="seg__btn label" type="button" data-ativo="usdbrl" aria-pressed="true">USD/BRL</button>
-        <button class="seg__btn label" type="button" data-ativo="btcusd" aria-pressed="false">BTC/USD</button>
-        <button class="seg__btn label" type="button" data-ativo="btcbrl" aria-pressed="false">BTC/BRL</button>
-      </div>
-      <div class="table-wrap">
-        <table class="heat" id="heat"></table>
-      </div>
+      <div class="heat" id="heat"></div>
       <div class="escala" id="escala" aria-hidden="true"></div>
     </section>
 
     <!-- 4. Estresses -->
     <section class="panel glass" aria-labelledby="h-est">
       <div class="head">
-        <p class="eyebrow">Do mais severo ao menos severo</p>
+        <p class="eyebrow"><span class="passo">4</span>Do mais severo ao menos severo, no ativo escolhido</p>
         <h2 id="h-est">Cenários de estresse e o que precisaria acontecer</h2>
-        <p class="sub">Três episódios reconstruídos com dados reais e um cenário construído para 2026–27. Em todos, a trajetória histórica é seguida até o pior ponto; depois disso, nenhuma recuperação é assumida.</p>
+        <p class="sub" id="est-sub"></p>
       </div>
       <div class="cenarios" id="cenarios"></div>
     </section>
@@ -92,8 +86,9 @@
     <!-- 5. Gatilhos -->
     <section class="panel glass" aria-labelledby="h-gat">
       <div class="head">
-        <p class="eyebrow">Monitorados a cada atualização</p>
+        <p class="eyebrow"><span class="passo">5</span>Monitorados a cada atualização</p>
         <h2 id="h-gat">Gatilhos de risco hoje</h2>
+        <p class="sub">Só a Selic real entra no modelo. Os demais não alteram as projeções: servem para dizer quais estresses estão mais próximos de hoje.</p>
       </div>
       <ul class="gatilhos" id="gatilhos"></ul>
     </section>
@@ -101,35 +96,44 @@
     <!-- 6. Backtest -->
     <section class="panel glass" aria-labelledby="h-bt">
       <div class="head">
-        <p class="eyebrow">Verificação fora da amostra</p>
+        <p class="eyebrow"><span class="passo">6</span>Verificação fora da amostra</p>
         <h2 id="h-bt">Backtest: o modelo teria acertado a cauda?</h2>
         <p class="sub" id="bt-sub"></p>
       </div>
-      <div class="table-wrap">
-        <table class="bt" id="bt"></table>
-      </div>
-      <div class="table-wrap">
-        <table class="bt" id="bt-choques"></table>
-      </div>
+      <div class="veredito" id="bt-veredito"></div>
+      <div id="bt"></div>
+      <details class="mais">
+        <summary>Resultado por corte (2018 e 2021)</summary>
+        <div id="bt-cortes"></div>
+      </details>
+      <h3 class="h3">Os choques reais caberiam no P5?</h3>
+      <div id="bt-choques"></div>
       <p class="note" id="bt-nota"></p>
     </section>
 
     <!-- 7. Método e fontes -->
     <section class="panel glass" aria-labelledby="h-met">
       <div class="head">
-        <p class="eyebrow">Premissas explícitas</p>
+        <p class="eyebrow"><span class="passo">7</span>Premissas explícitas</p>
         <h2 id="h-met">Como o painel chega a esses números</h2>
       </div>
       <ul class="premissas" id="premissas"></ul>
-      <details class="fontes">
-        <summary class="label">Fontes e datas de coleta</summary>
-        <div class="table-wrap"><table class="fontes__t" id="fontes"></table></div>
+      <div class="dupla">
+        <figure class="mini">
+          <figcaption id="corr-cap"></figcaption>
+          <div class="chart__svg" id="corr"></div>
+        </figure>
+        <div class="refs" id="refs"></div>
+      </div>
+      <details class="mais">
+        <summary>Fontes e datas de coleta</summary>
+        <ul class="fontes" id="fontes"></ul>
       </details>
       <p class="note"><a href="METODOLOGIA.md">METODOLOGIA.md</a> descreve o modelo completo, as escolhas testadas e as limitações.</p>
     </section>
   </main>
 
-  <footer class="footbar glass label">
+  <footer class="footbar">
     <span id="rodape-data">—</span>
     <span>USD/BRL · BTC/USD · BTC/BRL</span>
   </footer>

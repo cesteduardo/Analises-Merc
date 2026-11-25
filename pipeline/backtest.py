@@ -41,6 +41,7 @@ def rodar(cfg):
     xfx_long = -np.log(fx_long).diff().dropna()
     selic, _ = serie("selic_meta")
     ff, _ = serie("fed_funds")
+    rr_all = juro_real_expost(xfx_long.index)
     out = {"config": cfg, "cortes": {}, "registros": []}
     rng = np.random.default_rng(20261125)
     for nome, c in CORTES.items():
@@ -51,6 +52,7 @@ def rodar(cfg):
         if cfg.get("btc_alvo_anos"):
             alvo_b = float(np.var(xb[-252 * cfg["btc_alvo_anos"]:]))
         gf, gb = Garch(xf), Garch(xb, alvo_var=alvo_b)
+        reg_jr = ajustar_deriva_juro_real(xfx_long, rr_all, fim) if cfg["deriva_fx"] == "juro_real" else None
         cf = estimar_crise(xf, g=gf) if cfg.get("crise") else None
         cb = estimar_crise(xb, g=gb) if cfg.get("crise") else None
         rr = r[:fim]
@@ -61,7 +63,7 @@ def rodar(cfg):
         grade = np.round(np.arange(-0.3, 0.651, 0.05), 2)
         inov = {g: inovacoes(N, H_MAX, g, nu_c, gf.nu, gb.nu, rng) for g in grade}
         out["cortes"][nome] = {"fx": gf.params(), "btc": gb.params(), "rho": rho_all, "nu_copula": nu_c,
-                               "crise_fx": cf, "crise_btc": cb}
+                               "crise_fx": cf, "crise_btc": cb, "deriva_juro_real": reg_jr}
         # variâncias filtradas com parâmetros congelados ao longo de toda a amostra
         xf_all = xfx_long[cfg["fx_ini"]:]
         s2f, _ = gf.filtrar(xf_all.values)
@@ -85,7 +87,11 @@ def rodar(cfg):
             rho = float(zf[:o].iloc[-250:].corr(zb[:o].iloc[-250:]))
             g = grade[np.argmin(np.abs(grade - rho))]
             e1, e2 = inov[g]
-            mu_f = -selic_ff(o, selic, ff) / 252 if cfg["deriva_fx"] == "carry" else 0.0
+            mu_f = 0.0
+            if cfg["deriva_fx"] == "carry":
+                mu_f = -selic_ff(o, selic, ff) / 252
+            elif cfg["deriva_fx"] == "juro_real":
+                mu_f = deriva_juro_real(reg_jr, float(rr_all[o]))
             sf = simular_com_crise(gf, v_f, e1, mu_f, cf, rng).cumsum(axis=1)
             sb = simular_com_crise(gb, v_b, e2, 0.0, cb, rng).cumsum(axis=1)
             s0f, s0b = df["fx"].iloc[i0], df["btc"].iloc[i0]
