@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
 from nucleo import *
+from variantes import VARIANTES
 
 CORTES = {
     "2018": dict(fim_ajuste="2017-12-31", aval_ini="2018-01-01", aval_fim="2020-12-31"),
@@ -25,7 +26,14 @@ CHOQUES = {  # origem imediatamente anterior ao choque, escolhida pelo históric
     "Pacote fiscal (dez/2024)": "2024-09-30",
 }
 N, PASSO = 4000, 5
+N_DENTRO, PASSO_DENTRO, K_MAX = 2000, 10, 2.0
 QS = {"P50": .50, "P10": .10, "P5": .05, "P1": .01}
+
+
+def recalibrar_pit(p, k):
+    """Com o P10 lido no nível 0,10/k do modelo (e P5, P1 na mesma proporção),
+    o PIT equivalente na cauda ruim é p·k. Acima da mediana nada muda."""
+    return float(min(p * k, max(p, .5)))
 
 
 def selic_ff(data, selic, ff):
@@ -53,6 +61,8 @@ def rodar(cfg):
         gf, gb = Garch(xf), Garch(xb, alvo_var=alvo_b)
         cf = estimar_crise(xf, g=gf) if cfg.get("crise") else None
         cb = estimar_crise(xb, g=gb) if cfg.get("crise") else None
+        tf = estimar_deriva_incerta(xf, gf, cf) if cfg.get("deriva_incerta_fx") else None
+        tb = estimar_deriva_incerta(xb, gb, cb) if cfg.get("deriva_incerta_btc") else None
         rr = r[:fim]
         z1 = residuos_padronizados(gf, xfx_long[cfg["fx_ini"]:fim].reindex(rr.index).fillna(0).values)
         z2 = residuos_padronizados(gb, rr["x_btc"].values)
@@ -61,7 +71,7 @@ def rodar(cfg):
         grade = np.round(np.arange(-0.3, 0.651, 0.05), 2)
         inov = {g: inovacoes(N, H_MAX, g, nu_c, gf.nu, gb.nu, rng) for g in grade}
         out["cortes"][nome] = {"fx": gf.params(), "btc": gb.params(), "rho": rho_all, "nu_copula": nu_c,
-                               "crise_fx": cf, "crise_btc": cb}
+                               "crise_fx": cf, "crise_btc": cb, "tendencia_fx": tf, "tendencia_btc": tb}
         # variâncias filtradas com parâmetros congelados ao longo de toda a amostra
         xf_all = xfx_long[cfg["fx_ini"]:]
         s2f, _ = gf.filtrar(xf_all.values)
@@ -77,32 +87,85 @@ def rodar(cfg):
             d = idx[idx <= d][-1]
             if c["aval_ini"] <= str(d.date()) <= c["aval_fim"] and d not in origens:
                 origens.append(d)
-        for o in sorted(origens):
-            i0 = idx.get_loc(o)
-            # variância prevista para o passo seguinte, só com dados até a origem
+        def simular_origem(o, n_traj, so_fx=False):
+            """Trajetórias acumuladas (direção ruim) a partir da origem o, só com
+            dados até o. Devolve (sf, sb); sb é None quando so_fx."""
             v_f = gf.omega + (gf.alpha + gf.gamma * (xf_all[o] < 0)) * xf_all[o] ** 2 + gf.beta * s2f[o]
-            v_b = gb.omega + (gb.alpha + gb.gamma * (r["x_btc"][o] < 0)) * r["x_btc"][o] ** 2 + gb.beta * s2b[o]
-            rho = float(zf[:o].iloc[-250:].corr(zb[:o].iloc[-250:]))
-            g = grade[np.argmin(np.abs(grade - rho))]
-            e1, e2 = inov[g]
+            if so_fx:
+                e1 = t_padronizada_ppf(np.clip(rng.random((n_traj, H_MAX)), 1e-12, 1 - 1e-12), gf.nu)
+                e2 = None
+            else:
+                rho = float(zf[:o].iloc[-250:].corr(zb[:o].iloc[-250:]))
+                g = grade[np.argmin(np.abs(grade - rho))]
+                e1, e2 = inov[g]
+                e1, e2 = e1[:n_traj], e2[:n_traj]
             mu_f = -selic_ff(o, selic, ff) / 252 if cfg["deriva_fx"] == "carry" else 0.0
-            sf = simular_com_crise(gf, v_f, e1, mu_f, cf, rng).cumsum(axis=1)
-            sb = simular_com_crise(gb, v_b, e2, 0.0, cb, rng).cumsum(axis=1)
-            s0f, s0b = df["fx"].iloc[i0], df["btc"].iloc[i0]
+            mtf = rng.standard_normal(n_traj) * tf["s_diaria"] if tf else None
+            sf = simular_com_crise(gf, v_f, e1, mu_f, cf, rng, mu_trilha=mtf).cumsum(axis=1)
+            if so_fx:
+                return sf, None
+            v_b = gb.omega + (gb.alpha + gb.gamma * (r["x_btc"][o] < 0)) * r["x_btc"][o] ** 2 + gb.beta * s2b[o]
+            mtb = rng.standard_normal(n_traj) * tb["s_diaria"] if tb else None
+            sb = simular_com_crise(gb, v_b, e2, 0.0, cb, rng, mu_trilha=mtb).cumsum(axis=1)
+            return sf, sb
+
+        def pits(o, sf, sb, nivel_fx, nivel_btc, limite=None):
+            """PIT do realizado em cada horizonte, na direção ruim. Com `limite`, só
+            horizontes que terminam até essa data (avaliação dentro da amostra)."""
+            idx_f = nivel_fx.index
+            i0 = idx_f.get_loc(o)
+            s0f = nivel_fx.iloc[i0]
+            s0b = nivel_btc.iloc[i0] if nivel_btc is not None else None
+            res = []
             for hd, hp in HORIZ_PASSOS.items():
-                if i0 + hp >= len(idx):
+                if i0 + hp >= len(idx_f) or (limite is not None and idx_f[i0 + hp] > limite):
                     continue
-                real_f, real_b = df["fx"].iloc[i0 + hp], df["btc"].iloc[i0 + hp]
-                lv = {"usdbrl": sf[:, hp - 1], "btcusd": sb[:, hp - 1],
-                      "btcbrl": sb[:, hp - 1] - sf[:, hp - 1]}
-                # na direção ruim: valores baixos = pior
-                real = {"usdbrl": -np.log(real_f / s0f), "btcusd": np.log(real_b / s0b),
-                        "btcbrl": np.log(real_b * real_f / (s0b * s0f))}
+                real_f = nivel_fx.iloc[i0 + hp]
+                lv = {"usdbrl": sf[:, hp - 1]}
+                real = {"usdbrl": -np.log(real_f / s0f)}
+                if sb is not None:
+                    real_b = nivel_btc.iloc[i0 + hp]
+                    lv.update({"btcusd": sb[:, hp - 1], "btcbrl": sb[:, hp - 1] - sf[:, hp - 1]})
+                    real.update({"btcusd": np.log(real_b / s0b), "btcbrl": np.log(real_b * real_f / (s0b * s0f))})
                 for a in lv:
-                    pit = float((lv[a] < real[a]).mean())
-                    q = {k: float(np.quantile(lv[a], v)) for k, v in QS.items()}
-                    out["registros"].append({"corte": nome, "origem": str(o.date()), "h": hd, "ativo": a,
-                                             "pit": pit, "real": float(real[a]), **q})
+                    res.append((hd, a, lv[a], float(real[a])))
+            return res
+
+        # ---- recalibração dos quantis, estimada só dentro da amostra de ajuste ----
+        k_recal = {a: {h: 1.0 for h in HORIZ_DIAS} for a in ("usdbrl", "btcusd", "btcbrl")}
+        if cfg.get("recal"):
+            dentro = {a: {h: [] for h in HORIZ_DIAS} for a in k_recal}
+            fx_niv = fx_long[cfg["fx_ini"]:]
+            o_fx = fx_niv.index[(fx_niv.index > xf_all.index[300]) & (fx_niv.index < fim)][::PASSO_DENTRO]
+            for o in o_fx:
+                sf, _ = simular_origem(o, N_DENTRO, so_fx=True)
+                for hd, a, lv, re in pits(o, sf, None, fx_niv, None, limite=fim):
+                    dentro[a][hd].append(float((lv < re).mean()))
+            o_b = idx[(idx > idx[300]) & (idx < fim)][::PASSO_DENTRO]
+            for o in o_b:
+                sf, sb = simular_origem(o, N_DENTRO)
+                for hd, a, lv, re in pits(o, sf, sb, df["fx"], df["btc"], limite=fim):
+                    if a != "usdbrl":
+                        dentro[a][hd].append(float((lv < re).mean()))
+            for a in dentro:
+                for h in HORIZ_DIAS:
+                    v = np.array(dentro[a][h])
+                    f10 = float((v < .10).mean()) if len(v) else .10
+                    # só torna o painel mais pessimista, nunca menos; teto de 2x
+                    k_recal[a][h] = float(np.clip(f10 / .10, 1.0, K_MAX))
+            out["cortes"][nome]["recal"] = {a: {str(h): {"k": k_recal[a][h], "n_dentro": len(dentro[a][h]),
+                                                         "f10_dentro": float((np.array(dentro[a][h]) < .1).mean()) if dentro[a][h] else None}
+                                                for h in HORIZ_DIAS} for a in dentro}
+
+        for o in sorted(origens):
+            sf, sb = simular_origem(o, N)
+            for hd, a, lv, re in pits(o, sf, sb, df["fx"], df["btc"]):
+                k = k_recal[a][hd]
+                pit_bruto = float((lv < re).mean())
+                q = {kk: float(np.quantile(lv, v / k if v < .5 else v)) for kk, v in QS.items()}
+                out["registros"].append({"corte": nome, "origem": str(o.date()), "h": hd, "ativo": a,
+                                         "pit": recalibrar_pit(pit_bruto, k), "pit_bruto": pit_bruto, "k": k,
+                                         "real": re, **q})
     return out
 
 
@@ -120,15 +183,14 @@ def resumir(out):
 
 
 if __name__ == "__main__":
-    cfg = dict(fx_ini="2003-01-01", deriva_fx=sys.argv[1] if len(sys.argv) > 1 else "zero",
-               btc_alvo_anos=int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] != "0" else None,
-               crise=len(sys.argv) > 3 and sys.argv[3] == "crise")
+    # uso: python3 pipeline/backtest.py <variante>   (ver pipeline/variantes.py)
+    tag = sys.argv[1] if len(sys.argv) > 1 else "zero_tudo_crise"
+    cfg = dict(VARIANTES[tag], tag=tag)
     out = rodar(cfg)
     res = resumir(out)
     pd.set_option("display.width", 200)
     print(json.dumps(cfg))
     print(res.to_string(index=False, float_format=lambda v: f"{v:.3f}"))
-    tag = f"{cfg['deriva_fx']}_{cfg['btc_alvo_anos'] or 'tudo'}" + ("_crise" if cfg["crise"] else "")
     out["resumo"] = res.to_dict(orient="records")
     out["gerado_em"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     (RAIZ / "data" / "processed" / f"backtest_{tag}.json").write_text(json.dumps(out))

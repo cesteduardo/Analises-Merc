@@ -6,7 +6,7 @@
   "use strict";
 
   var P = null;
-  var estado = { ativo: "usdbrl", dist: "base", dia: null };
+  var estado = { ativoHeat: "usdbrl", dist: "base", dia: null };
   var NOMES = { usdbrl: "USD/BRL", btcusd: "BTC/USD", btcbrl: "BTC/BRL" };
   var DESC = { usdbrl: "reais por dólar (PTAX)", btcusd: "bitcoin em dólar", btcbrl: "derivado: BTC/USD × USD/BRL" };
   var QS = ["P1", "P5", "P10", "P50"];
@@ -82,22 +82,24 @@
     el("tiles").innerHTML = html;
     el("hero-nota").textContent = "Pior, aqui, é o dólar mais caro e o bitcoin mais barato. P1, P5 e P10 são os pontos que só 1%, 5% e 10% das trajetórias ultrapassam nessa direção; P50 é a mediana. BTC/BRL é sempre calculado de BTC/USD × USD/BRL na mesma trajetória.";
     // selos de estado
-    var r = P.backtest.resumo, dentro = 0;
-    r.forEach(function (x) { if (x.abaixo_p10 >= .08 && x.abaixo_p10 <= .12) dentro++; });
+    var v = veredito();
     var alertas = P.gatilhos.filter(function (g) { return g.status === "alerta"; }).map(function (g) { return g.nome; });
     el("selo").innerHTML =
-      '<span class="chip glass" data-s="' + (dentro === r.length ? "ok" : "fora") + '"><i aria-hidden="true"></i>Backtest: ' + dentro + ' de ' + r.length + ' combinações na meta de 8% a 12%. Calibração em andamento.</span>' +
-      '<span class="chip glass" data-s="' + (alertas.length ? "alerta" : "normal") + '"><i aria-hidden="true"></i>' +
-      (alertas.length ? "Gatilhos em alerta: " + esc(alertas.join(", ")) : "Nenhum gatilho em alerta") + '</span>';
+      '<a class="chip glass" href="#h-bt" data-s="' + (v.dentro === v.total && !v.sig ? "ok" : "fora") + '"><i aria-hidden="true"></i>Backtest: ' + v.dentro + ' de ' + v.total + ' células na meta de 8% a 12%; ' + (v.sig ? v.sig + ' desvios significativos' : 'nenhum desvio significativo') + '. Calibração parcial.</a>' +
+      '<a class="chip glass" href="#h-gat" data-s="' + (alertas.length ? "alerta" : "normal") + '"><i aria-hidden="true"></i>' +
+      (alertas.length ? "Gatilhos em alerta: " + esc(alertas.join(", ")) : "Nenhum gatilho em alerta") + '</a>';
   }
 
-  /* ---------- 2. leque ---------- */
+  /* ---------- 2. leques, um por ativo ---------- */
+  var ATIVOS = ["usdbrl", "btcusd", "btcbrl"];
+  var marcadores = {};
+
   function opcoes() {
     var s = el("cenario-sel");
     var h = '<option value="base">Distribuição-base</option>';
     P.cenarios.forEach(function (c) { h += '<option value="' + c.id + '">Estresse · ' + esc(c.nome) + ' (' + esc(c.periodo) + ')</option>'; });
     s.innerHTML = h;
-    s.addEventListener("change", function () { estado.dist = s.value; estado.dia = null; leque(); tabela(); });
+    s.addEventListener("change", function () { estado.dist = s.value; leques(); });
   }
 
   function niceLog(min, max, n) {
@@ -110,15 +112,42 @@
     return out.filter(function (v, i, a) { return a.indexOf(v) === i; });
   }
 
-  function leque() {
-    var a = estado.ativo, D = dist(), L = D.a[a].leque;
-    var box = el("leque"), W = Math.max(300, Math.round(box.clientWidth || 640));
+  function leques() {
+    var D = dist();
+    var html = "";
+    ATIVOS.forEach(function (a) {
+      html += '<figure class="fan" id="fan-' + a + '">' +
+        '<div class="fan__topo"><h3>' + NOMES[a] + '</h3><p class="note">' + DESC[a] + ' · hoje ' + moeda(a, P.spot[a]) + '</p></div>' +
+        '<div class="leitura" id="leitura-' + a + '" aria-live="polite"></div>' +
+        '<div class="chart__svg" id="svg-' + a + '"></div>' +
+        '<div class="table-wrap"><table class="quantis" id="tab-' + a + '"></table></div>' +
+        '</figure>';
+    });
+    el("leques").innerHTML = html;
+    ATIVOS.forEach(function (a) { desenharLeque(a, D); tabela(a, D); });
+    marcarTodos(estado.dia || 252);
+    el("legenda").innerHTML =
+      '<span><i style="background:var(--primary);height:2px"></i>Histórico e mediana (P50)</span>' +
+      '<span><i style="background:var(--band-1)"></i>P50 a P10</span>' +
+      '<span><i style="background:var(--band-2)"></i>P10 a P5</span>' +
+      '<span><i style="background:var(--band-3)"></i>P5 a P1</span>' +
+      '<span><i style="background:var(--red);height:3px"></i>P1, cauda ruim</span>' +
+      '<span><i style="border-top:1.5px dashed var(--cold);height:0"></i>P90, lado favorável</span>' +
+      '<span>Escala logarítmica · eixo em dias úteis · as três curvas usam as mesmas trajetórias</span>';
+    var nota = "Para USD/BRL, P10, P5 e P1 são os percentis 90, 95 e 99 da cotação (dólar mais caro); para BTC/USD e BTC/BRL, os percentis 10, 5 e 1 (preço mais baixo).";
+    if (P.modelo.recal) nota += " Os quantis da cauda já incluem a recalibração estimada no histórico (ver premissas).";
+    if (D.c) nota += " Cenário de estresse: " + D.c.premissas.deriva + ".";
+    el("nota-quantis").textContent = nota;
+  }
+
+  function desenharLeque(a, D) {
+    var L = D.a[a].leque;
+    var box = el("svg-" + a), W = Math.max(300, Math.round(box.clientWidth || 640));
     var estreito = W < 560;
-    var H = estreito ? 300 : 380;
-    var m = { l: estreito ? 46 : 58, r: estreito ? 62 : 84, t: 14, b: 30 };
+    var H = estreito ? 250 : 300;
+    var m = { l: estreito ? 46 : 58, r: estreito ? 64 : 88, t: 12, b: 28 };
     var hist = P.historico.slice(-(estreito ? 90 : 130));
-    var nh = hist.length;
-    var x0 = -(nh - 1), x1 = 252;
+    var nh = hist.length, x0 = -(nh - 1), x1 = 252;
     var vals = [];
     hist.forEach(function (h) { vals.push(h[a]); });
     L.forEach(function (p) { vals.push(p.P1, p.P90f, p.P50); });
@@ -131,114 +160,109 @@
       var dn = L.slice().reverse().map(function (p) { return [X(p.d), Y(p[k2])]; });
       return pth(up.concat(dn)) + "Z";
     };
-    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Cone de risco de ' + NOMES[a] + ' em 365 dias, ' + esc(D.nome) + '. Valores na tabela abaixo." tabindex="0">';
-    // grade y
+    var fim = L[L.length - 1];
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" tabindex="0" aria-label="Cone de risco de ' + NOMES[a] + ', ' + esc(D.nome) +
+      '. Em 365 dias: P1 ' + moeda(a, fim.P1) + ', P5 ' + moeda(a, fim.P5) + ', P10 ' + moeda(a, fim.P10) + ', mediana ' + moeda(a, fim.P50) +
+      '. Use as setas para percorrer os dias; a tabela abaixo traz todos os valores.">';
     niceLog(ymin, ymax, estreito ? 4 : 5).forEach(function (v) {
       var y = Y(v);
       s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y + '" y2="' + y + '" style="stroke:var(--hairline)" stroke-width="1"/>';
       s += '<text x="' + (m.l - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + curto(a, v) + '</text>';
     });
-    // guias de horizonte
     [["hoje", 0]].concat(HZ.map(function (h) { return [h + "d", P.passos[h]]; })).forEach(function (g) {
       var x = X(g[1]);
       s += '<line x1="' + x + '" x2="' + x + '" y1="' + m.t + '" y2="' + (H - m.b) + '" style="stroke:var(--hairline)" stroke-dasharray="' + (g[1] ? "3 4" : "0") + '"/>';
-      if (!(estreito && g[0] === "30d")) s += '<text x="' + x + '" y="' + (H - 10) + '" text-anchor="middle">' + g[0] + '</text>';
+      if (!(estreito && g[0] === "30d")) s += '<text x="' + x + '" y="' + (H - 9) + '" text-anchor="middle">' + g[0] + '</text>';
     });
-    // faixas
     s += '<path d="' + faixa("P50", "P10") + '" style="fill:var(--band-1)"/>';
     s += '<path d="' + faixa("P10", "P5") + '" style="fill:var(--band-2)"/>';
     s += '<path d="' + faixa("P5", "P1") + '" style="fill:var(--band-3)"/>';
     s += '<path d="' + pth(L.map(function (p) { return [X(p.d), Y(p.P90f)]; })) + '" fill="none" style="stroke:var(--cold)" stroke-width="1.2" stroke-dasharray="4 4"/>';
     s += '<path d="' + pth(L.map(function (p) { return [X(p.d), Y(p.P50)]; })) + '" fill="none" style="stroke:var(--primary)" stroke-width="1.6"/>';
-    s += '<path d="' + pth(L.map(function (p) { return [X(p.d), Y(p.P1)]; })) + '" fill="none" style="stroke:var(--red)" stroke-width="2.4"/>';
-    // histórico
+    s += '<path d="' + pth(L.map(function (p) { return [X(p.d), Y(p.P1)]; })) + '" fill="none" style="stroke:var(--red)" stroke-width="2.6"/>';
     s += '<path d="' + pth(hist.map(function (h, i) { return [X(i - (nh - 1)), Y(h[a])]; })) + '" fill="none" style="stroke:var(--primary)" stroke-width="1.4"/>';
     s += '<circle cx="' + X(0) + '" cy="' + Y(P.spot[a]) + '" r="3.5" style="fill:var(--primary)"/>';
-    // rótulos finais sem colisão
-    var fim = L[L.length - 1];
     var rot = [["P90", fim.P90f, ""], ["P50", fim.P50, "rot-p50"], ["P10", fim.P10, ""], ["P5", fim.P5, ""], ["P1", fim.P1, "rot-p1"]]
       .map(function (r) { return { k: r[0], v: r[1], c: r[2], y: Y(r[1]) }; })
       .sort(function (p, q) { return p.y - q.y; });
     for (var i = 1; i < rot.length; i++) if (rot[i].y - rot[i - 1].y < 13) rot[i].y = rot[i - 1].y + 13;
     var exced = rot[rot.length - 1].y - (H - m.b + 4);
     if (exced > 0) rot.forEach(function (r) { r.y -= exced; });
+    if (rot[0].y < m.t) { var d0 = m.t - rot[0].y; rot.forEach(function (r) { r.y += d0; }); }
     rot.forEach(function (r) {
       s += '<text x="' + (W - m.r + 6) + '" y="' + (r.y + 4) + '" class="' + r.c + '">' + r.k + " " + curto(a, r.v) + '</text>';
     });
-    s += '<g id="cursor" style="display:none"><line y1="' + m.t + '" y2="' + (H - m.b) + '" style="stroke:var(--secondary)" stroke-width="1"/>' +
-      '<circle r="3.5" class="c50" style="fill:var(--primary)"/><circle r="4" class="c1" style="fill:var(--red)"/></g>';
-    s += '<rect x="' + X(0) + '" y="' + m.t + '" width="' + (X(252) - X(0)) + '" height="' + (H - m.t - m.b) + '" fill="transparent" id="alvo"/>';
+    s += '<g class="cursor" style="display:none"><line y1="' + m.t + '" y2="' + (H - m.b) + '" style="stroke:var(--secondary)" stroke-width="1"/>' +
+      '<circle r="3.5" class="c50" style="fill:var(--primary)"/><circle r="4.5" class="c1" style="fill:var(--red)"/></g>';
+    s += '<rect x="' + X(0) + '" y="' + m.t + '" width="' + (X(252) - X(0)) + '" height="' + (H - m.t - m.b) + '" fill="transparent"/>';
     s += "</svg>";
     box.innerHTML = s;
-
-    var svg = box.querySelector("svg"), cur = svg.querySelector("#cursor");
-    function marcar(d) {
+    var svg = box.querySelector("svg"), cur = svg.querySelector(".cursor");
+    marcadores[a] = function (d) {
       var p = L.reduce(function (b, q) { return Math.abs(q.d - d) < Math.abs(b.d - d) ? q : b; }, L[1]);
       if (p.d < 1) p = L[1];
-      estado.dia = p.d;
       cur.style.display = "";
-      cur.querySelector("line").setAttribute("x1", X(p.d)); cur.querySelector("line").setAttribute("x2", X(p.d));
+      var ln = cur.querySelector("line");
+      ln.setAttribute("x1", X(p.d)); ln.setAttribute("x2", X(p.d));
       var c5 = cur.querySelector(".c50"), c1 = cur.querySelector(".c1");
       c5.setAttribute("cx", X(p.d)); c5.setAttribute("cy", Y(p.P50));
       c1.setAttribute("cx", X(p.d)); c1.setAttribute("cy", Y(p.P1));
       leitura(a, p);
-    }
+      return p.d;
+    };
     function mover(ev) {
       var r = svg.getBoundingClientRect();
       var px = (ev.clientX - r.left) * (W / r.width);
       var d = x0 + (px - m.l) / (W - m.l - m.r) * (x1 - x0);
-      if (d >= 0) marcar(Math.min(252, d));
+      if (d >= 0) marcarTodos(Math.min(252, d));
     }
     svg.addEventListener("pointermove", mover);
     svg.addEventListener("pointerdown", mover);
     svg.addEventListener("keydown", function (ev) {
       var d = estado.dia || 252;
-      if (ev.key === "ArrowLeft") { marcar(Math.max(1, d - 7)); ev.preventDefault(); }
-      if (ev.key === "ArrowRight") { marcar(Math.min(252, d + 7)); ev.preventDefault(); }
+      if (ev.key === "ArrowLeft") { marcarTodos(Math.max(1, d - 7)); ev.preventDefault(); }
+      if (ev.key === "ArrowRight") { marcarTodos(Math.min(252, d + 7)); ev.preventDefault(); }
+      if (ev.key === "Home") { marcarTodos(1); ev.preventDefault(); }
+      if (ev.key === "End") { marcarTodos(252); ev.preventDefault(); }
     });
-    marcar(estado.dia || 252);
+  }
 
-    el("legenda").innerHTML =
-      '<span><i style="background:var(--primary);height:2px"></i>Histórico e mediana (P50)</span>' +
-      '<span><i style="background:var(--band-1)"></i>P50 a P10</span>' +
-      '<span><i style="background:var(--band-2)"></i>P10 a P5</span>' +
-      '<span><i style="background:var(--band-3)"></i>P5 a P1</span>' +
-      '<span><i style="background:var(--red);height:3px"></i>P1, cauda ruim</span>' +
-      '<span><i style="border-top:1.5px dashed var(--cold);height:0"></i>P90, lado favorável</span>' +
-      '<span>Escala logarítmica · eixo em dias úteis</span>';
+  function marcarTodos(d) {
+    var dd = d;
+    ATIVOS.forEach(function (a) { if (marcadores[a]) dd = marcadores[a](d); });
+    estado.dia = dd;
   }
 
   function leitura(a, p) {
     var quando = P.datas_passos[p.d - 1];
     var dc = Math.round(p.d * 365 / 252);
-    el("leitura").innerHTML =
-      '<span class="leitura__quando">' + data(quando) + ' · dia útil ' + p.d + ' (~' + dc + ' dias corridos) · ' + esc(dist().nome) + '</span>' +
+    el("leitura-" + a).innerHTML =
+      '<span class="leitura__quando">' + data(quando) + ' · dia útil ' + p.d + ' (~' + dc + ' dias corridos)</span>' +
       '<span class="p1">P1<b>' + moeda(a, p.P1) + '</b></span>' +
       '<span>P5<b>' + moeda(a, p.P5) + '</b></span>' +
       '<span>P10<b>' + moeda(a, p.P10) + '</b></span>' +
       '<span>P50<b>' + moeda(a, p.P50) + '</b></span>';
   }
 
-  function tabela() {
-    var a = estado.ativo, D = dist(), H = D.a[a].horizontes;
-    var h = '<caption>' + NOMES[a] + ' · ' + DESC[a] + ' · ' + esc(D.nome) + ' · hoje ' + moeda(a, P.spot[a]) + '</caption>' +
-      '<thead><tr><th scope="col">Horizonte</th><th scope="col" class="p1">P1</th><th scope="col">P5</th><th scope="col">P10</th><th scope="col">P50</th><th scope="col">P90 <small>favorável</small></th></tr></thead><tbody>';
-    HZ.forEach(function (hz) {
-      var r = H[hz];
-      h += '<tr><th scope="row">' + hz + ' dias</th>';
-      QS.forEach(function (q) { h += '<td class="' + (q === "P1" ? "p1" : "") + '">' + moeda(a, r[q].nivel) + '<small>' + pct(r[q].var_pct) + '</small></td>'; });
-      h += '<td>' + moeda(a, r.P90f.nivel) + '<small>' + pct(r.P90f.var_pct) + '</small></td></tr>';
+  function tabela(a, D) {
+    var H = D.a[a].horizontes;
+    var linhas = [["P1", "P1", "p1"], ["P5", "P5", ""], ["P10", "P10", ""], ["P50", "P50 · mediana", ""], ["P90f", "P90 · favorável", "fav"]];
+    var h = '<caption class="sr-only">' + NOMES[a] + ', ' + esc(D.nome) + ': quantis por horizonte</caption>' +
+      '<thead><tr><th scope="col">Quantil</th>' + HZ.map(function (z) { return '<th scope="col">' + z + ' dias</th>'; }).join("") + '</tr></thead><tbody>';
+    linhas.forEach(function (l) {
+      h += '<tr class="' + l[2] + '"><th scope="row">' + l[1] + '</th>';
+      HZ.forEach(function (z) { var r = H[z][l[0]]; h += '<td>' + moeda(a, r.nivel) + '<small>' + pct(r.var_pct) + '</small></td>'; });
+      h += '</tr>';
     });
-    el("tabela-quantis").innerHTML = h + "</tbody>";
-    var nota = a === "usdbrl" ? "Para USD/BRL, P10, P5 e P1 são os percentis 90, 95 e 99 da cotação: dólar mais caro."
-      : "Para " + NOMES[a] + ", P10, P5 e P1 são os percentis 10, 5 e 1: preço mais baixo.";
-    if (D.c) nota += " Cenário de estresse: " + D.c.premissas.deriva + ".";
-    el("nota-quantis").textContent = nota;
+    var an = P.ancoras_historicas[a];
+    h += '<tr class="ancora"><th scope="row">Pior histórico<small>desde ' + data(an["30"].desde).slice(6) + '</small></th>';
+    HZ.forEach(function (z) { h += '<td>' + pct(an[z].var_pct, 0) + '<small>' + data(an[z].inicio).slice(3) + '</small></td>'; });
+    el("tab-" + a).innerHTML = h + '</tr></tbody>';
   }
 
   /* ---------- 3. mapa de calor ---------- */
   function heat() {
-    var a = estado.ativo;
+    var a = estado.ativoHeat;
     var linhas = [{ nome: "Distribuição-base", sub: "GARCH-t + camada de crise", d: P.base[a].drawdown }]
       .concat(P.cenarios.map(function (c) { return { nome: c.nome + " (" + c.periodo + ")", sub: c.tipo, d: c.ativos[a].drawdown }; }));
     var max = 0;
@@ -273,16 +297,16 @@
         return '<div><dt>' + NOMES[a] + '</dt><dd>' + moeda(a, v.nivel) + '<small>' + pct(v.var_pct) + '</small></dd></div>';
       }).join("");
       var linhas = [];
-      linhas.push(["Real perder valor", "dólar " + pct(pr.choque_fx_pct) + " em " + pr.dias_ate_pior_fx + " dias úteis", "USD/BRL em " + moeda("usdbrl", P.spot.usdbrl * (1 + pr.choque_fx_pct))]);
+      linhas.push(["Real perder valor", "dólar " + pct(pr.choque_fx_pct) + " em " + pr.dias_ate_pior_fx + " dias úteis", "levaria o dólar a " + moeda("usdbrl", P.spot.usdbrl * (1 + pr.choque_fx_pct))]);
       if (c.tipo === "reconstruído") {
-        linhas.push(["Bitcoin cair", pct(pr.choque_btc_pct) + " em " + pr.dias_ate_pior_btc + " dias úteis", "BTC em " + moeda("btcusd", P.spot.btcusd * (1 + pr.choque_btc_pct))]);
+        linhas.push(["Bitcoin cair", pct(pr.choque_btc_pct) + " em " + pr.dias_ate_pior_btc + " dias úteis", "levaria o BTC a " + moeda("btcusd", P.spot.btcusd * (1 + pr.choque_btc_pct))]);
         linhas.push(["Medo global (VIX)", "de " + F1.format(ge.vix_inicio) + " a " + F1.format(ge.vix_pico), "hoje " + F1.format(hoje.vix)]);
         linhas.push(["Dólar global no choque", pct(ge.dxy_var), "hoje " + pct(hoje.dxy) + " em 3 meses"]);
         if (ge.selic_real !== null) linhas.push(["Selic real ex-ante", F1.format(ge.selic_real) + "%", "hoje " + F1.format(hoje.selic) + "%"]);
         linhas.push(["Dívida bruta em 12 meses", pp(ge.dbgg_var_12m_pp), "hoje " + pp(hoje.dbgg)]);
         linhas.push(["Fluxo cambial no choque", bi(ge.fluxo_musd), "hoje " + bi(hoje.fluxo) + " em 63 dias"]);
       } else {
-        linhas.push(["Bitcoin", "sem queda própria; contágio só pela correlação", "BTC/USD mediano estável"]);
+        linhas.push(["Bitcoin", "sem queda própria; contágio só pela correlação", "mediana do BTC/USD estável"]);
         linhas.push(["Dívida bruta", "acima da trajetória do Focus (hipótese)", "Focus: " + F1.format(g.fiscal.focus_dbgg_prox_ano) + "% em " + (Number(P.data_base.slice(0, 4)) + 1)]);
         linhas.push(["Selic real ex-ante", "abaixo de 6% com expectativa desancorando (hipótese)", "hoje " + F1.format(hoje.selic) + "%"]);
         linhas.push(["Fluxo cambial", "saída persistente (hipótese)", "hoje " + bi(hoje.fluxo) + " em 63 dias"]);
@@ -318,45 +342,82 @@
   }
 
   /* ---------- 6. backtest ---------- */
-  function backtest() {
-    var bt = P.backtest, r = bt.resumo;
-    el("bt-sub").textContent = "Parâmetros estimados só com dados até 31/12/2017 (corte 2018) e até 31/12/2020 (corte 2021), congelados depois disso. A cada 5 dias úteis o modelo projetou de novo e comparamos com o que aconteceu. Meta: o realizado fica pior que o P10 entre 8% e 12% das vezes.";
-    var h = '<caption>Frequência em que o realizado ficou pior que o P10. Verde: na meta. Vermelho: o modelo subestimou o risco. Âmbar: foi pessimista demais.</caption>' +
-      '<thead><tr><th scope="col">Corte e ativo</th>' + HZ.map(function (z) { return '<th scope="col">' + z + ' dias</th>'; }).join("") + '</tr></thead><tbody>';
-    ["2018", "2021"].forEach(function (corte) {
-      var per = corte === "2018" ? "projeções de 2018 a 2020" : "projeções de 2021 a 2026";
-      h += '<tr class="grupo"><th scope="rowgroup" colspan="5">Corte ' + corte + ' · ' + per + '</th></tr>';
-      ["usdbrl", "btcusd", "btcbrl"].forEach(function (a) {
-        h += '<tr><th scope="row">' + NOMES[a] + '</th>';
+  function veredito() {
+    var ag = P.backtest.agregado, dentro = 0, sig = 0, fora = [];
+    ag.forEach(function (x) { if (x.p10 >= .08 && x.p10 <= .12) dentro++; else fora.push(x); });
+    ["2018", "2021"].forEach(function (c) { P.backtest.por_corte[c].forEach(function (x) { if (!(x.lo <= .1 && .1 <= x.hi)) sig++; }); });
+    var semCob = [];
+    P.contencao_estresses.forEach(function (c) {
+      ATIVOS.forEach(function (a) {
         HZ.forEach(function (z) {
-          var x = r.filter(function (q) { return q.corte === corte && q.ativo === a && String(q.h) === z; })[0];
-          if (!x) { h += "<td>—</td>"; return; }
-          var cls = x.abaixo_p10 > .12 ? "fora-alto" : x.abaixo_p10 < .08 ? "fora-baixo" : "dentro";
-          h += '<td class="' + cls + '">' + pct(x.abaixo_p10).replace("+", "") + '<small>P5: ' + pct(x.abaixo_p5).replace("+", "") + ' · ' + x.n + ' origens (~' + x.n_indep + ' indep.)</small></td>';
+          var x = c.celulas[a][z]; if (!x) return;
+          var pit = pitChoque(c.origem, a, z);
+          if (!(pit !== undefined && pit >= .05) && !x.contido_por.length) semCob.push(c.choque + ", " + NOMES[a] + " em " + z + " dias");
         });
-        h += "</tr>";
       });
     });
-    el("bt").innerHTML = h + "</tbody>";
-    var hc = '<caption>Os choques reais caberiam no P5? Posição do realizado na distribuição projetada às vésperas de cada choque.</caption>' +
+    return { dentro: dentro, total: ag.length, sig: sig, fora: fora, semCob: semCob };
+  }
+  function pitChoque(origem, a, z) {
+    var c = P.backtest.choques.filter(function (x) { return x.origem === origem; })[0];
+    return c && c.pit[a] ? c.pit[a][z] : undefined;
+  }
+
+  function celBt(x) {
+    var cls = x.p10 > .12 ? "fora-alto" : x.p10 < .08 ? "fora-baixo" : "dentro";
+    var sig = !(x.lo <= .1 && .1 <= x.hi);
+    return '<td class="' + cls + '">' + F1.format(x.p10 * 100) + '%' + (sig ? ' <abbr title="desvio estatisticamente significativo">!</abbr>' : '') +
+      '<small>IC95 ' + F0.format(x.lo * 100) + '–' + F0.format(x.hi * 100) + '% · n≈' + x.n_eff + '</small></td>';
+  }
+
+  function tabelaBt(cel, titulo) {
+    var h = '<caption>' + titulo + '</caption><thead><tr><th scope="col">Ativo</th>' + HZ.map(function (z) { return '<th scope="col">' + z + ' dias</th>'; }).join("") + '</tr></thead><tbody>';
+    ATIVOS.forEach(function (a) {
+      h += '<tr><th scope="row">' + NOMES[a] + '</th>';
+      HZ.forEach(function (z) {
+        var x = cel.filter(function (q) { return q.ativo === a && String(q.h) === z; })[0];
+        h += x ? celBt(x) : "<td>—</td>";
+      });
+      h += "</tr>";
+    });
+    return h + "</tbody>";
+  }
+
+  function backtest() {
+    var bt = P.backtest, v = veredito();
+    el("bt-sub").textContent = "Parâmetros estimados só com dados até 31/12/2017 (corte 2018) e até 31/12/2020 (corte 2021), congelados depois disso. A cada 5 dias úteis o modelo projetou de novo e comparamos com o que aconteceu. Meta do projeto: o realizado fica pior que o P10 entre 8% e 12% das vezes.";
+    el("bt-veredito").innerHTML =
+      '<li data-s="' + (v.dentro === v.total ? "ok" : "fora") + '"><b>' + v.dentro + ' de ' + v.total + '</b> células na faixa de 8% a 12%, com os dois cortes juntos. <span>Meta principal: não atendida por completo.</span></li>' +
+      '<li data-s="' + (v.sig ? "fora" : "ok") + '"><b>' + v.sig + ' de 24</b> células com desvio estatisticamente significativo, olhando cada corte. <span>' + (v.sig ? "" : "Nenhuma frequência é distinguível de 10% com os dados disponíveis.") + '</span></li>' +
+      '<li data-s="' + (v.semCob.length ? "fora" : "ok") + '"><b>' + (v.semCob.length ? v.semCob.length + (v.semCob.length > 1 ? " choques" : " choque") + " sem cobertura" : "Todos os choques cobertos") + '</b> pelo P5 da base ou de um estresse independente. <span>' + esc(v.semCob.join("; ")) + '</span></li>';
+    el("bt").innerHTML = tabelaBt(bt.agregado, "Os dois cortes juntos, 2018 a 2026: frequência em que o realizado ficou pior que o P10. Verde: na faixa. Vermelho: o modelo subestimou o risco. Âmbar: foi pessimista demais. “!” marca desvio estatisticamente significativo.");
+    el("bt-cortes").innerHTML =
+      '<div class="table-wrap"><table class="bt">' + tabelaBt(bt.por_corte["2018"], "Corte 2018: projeções de 2018 a 2020") + '</table></div>' +
+      '<div class="table-wrap"><table class="bt">' + tabelaBt(bt.por_corte["2021"], "Corte 2021: projeções de 2021 a 2026") + '</table></div>';
+    var periodoC = {}; P.cenarios.forEach(function (c) { periodoC[c.id] = c.periodo; });
+    var hc = '<caption>Os choques reais cabem no P5? Variação realizada a partir da véspera de cada choque. Verde: dentro do P5 da distribuição-base projetada naquela data. Âmbar: fora da base, mas dentro do P5 de um estresse construído sem aquele episódio. Vermelho: fora de tudo.</caption>' +
       '<thead><tr><th scope="col">Choque e ativo</th>' + HZ.map(function (z) { return '<th scope="col">' + z + ' dias</th>'; }).join("") + '</tr></thead><tbody>';
-    bt.choques.forEach(function (c) {
-      hc += '<tr class="grupo"><th scope="rowgroup" colspan="5">' + esc(c.nome) + '</th></tr>';
-      ["usdbrl", "btcusd", "btcbrl"].forEach(function (a) {
+    P.contencao_estresses.forEach(function (c) {
+      hc += '<tr class="grupo"><th scope="rowgroup" colspan="5">' + esc(c.choque) + ' · véspera em ' + data(c.origem) + '</th></tr>';
+      ATIVOS.forEach(function (a) {
         hc += '<tr><th scope="row">' + NOMES[a] + '</th>';
         HZ.forEach(function (z) {
-          var v = c.pit[a] && c.pit[a][z];
-          if (v === undefined) { hc += "<td>—</td>"; return; }
-          var txt = v < .01 ? "pior que o P1" : v < .05 ? "entre P5 e P1" : v < .10 ? "entre P10 e P5" : "dentro do P10";
-          var cls = v < .05 ? "fora-alto" : "dentro";
-          hc += '<td class="' + cls + '">' + txt + '<small>percentil ' + F1.format(v * 100) + '</small></td>';
+          var x = c.celulas[a][z];
+          if (!x) { hc += "<td>—</td>"; return; }
+          var pit = pitChoque(c.origem, a, z), txt, cls;
+          var base = pit !== undefined ? "base: percentil " + F1.format(pit * 100) : "";
+          if (pit !== undefined && pit >= .05) { txt = base; cls = "dentro"; }
+          else if (x.contido_por.length) { txt = base + "<br>coberto pelo estresse " + x.contido_por.map(function (i) { return esc(periodoC[i]); }).join(", "); cls = "parcial"; }
+          else { txt = base + "<br>fora de todos os estresses"; cls = "fora-alto"; }
+          hc += '<td class="' + cls + '">' + pct(x.real_pct, 0) + '<small>' + txt + '</small></td>';
         });
         hc += "</tr>";
       });
     });
     el("bt-choques").innerHTML = hc + "</tbody>";
-    var dentro = r.filter(function (x) { return x.abaixo_p10 >= .08 && x.abaixo_p10 <= .12; }).length;
-    el("bt-nota").textContent = "Leitura honesta: " + dentro + " de " + r.length + " combinações estão na meta. No corte 2018, o modelo subestimou a desvalorização do real de 2018 a 2020 (Covid e crise fiscal). No corte 2021, a camada de crise deixa os horizontes longos de USD/BRL pessimistas demais. Os choques da Covid em 30 dias ficaram além do P1: é para isso que existem os cenários de estresse. Com origens sobrepostas, o número de observações independentes é pequeno (coluna ‘indep.’), então diferenças de poucos pontos não são significativas.";
+    var fora = v.fora.map(function (x) { return NOMES[x.ativo] + " em " + x.h + " dias (" + F1.format(x.p10 * 100) + "%)"; });
+    el("bt-nota").textContent = "Leitura honesta: " + (fora.length ? "ficam fora da faixa " + fora.join(", ") + ". Em todas, o intervalo de confiança contém 10%: com origens sobrepostas, o número de observações independentes (n≈) é pequeno, e a faixa de 8% a 12% é mais estreita que o ruído do teste nos horizontes longos. " : "") +
+      "O corte 2018 cobre a alta persistente do dólar de 2018 a 2020, que um modelo sem aposta de tendência subestima; o corte 2021 cobre um câmbio que oscilou sem tendência forte, em que o mesmo modelo parece pessimista. Os choques que nem a base nem os estresses contêm ficam marcados acima, sem ajuste para escondê-los.";
   }
 
   /* ---------- 7. método e fontes ---------- */
@@ -364,15 +425,16 @@
     var mo = P.modelo, fx = mo.fx, bc = mo.btc;
     var itens = [
       "<b>Monte Carlo com " + F0.format(mo.n_trajetorias) + " trajetórias</b> de 252 dias úteis (365 corridos). Horizontes de 30, 90, 180 e 365 dias equivalem a 21, 63, 126 e 252 dias úteis.",
-      "<b>Volatilidade GJR-GARCH(1,1) com inovações t de Student</b>, estimada por máxima verossimilhança. Câmbio: amostra desde " + data(mo.amostra_fx[0]) + ", ν = " + F1.format(fx.nu) + ", persistência " + F2.format(fx.persistencia) + " (meia-vida de " + F0.format(fx.meia_vida_dias) + " dias). BTC: desde " + data(mo.amostra_btc[0]) + ", ν = " + F1.format(bc.nu) + ", persistência " + F2.format(bc.persistencia) + ".",
+      "<b>Volatilidade GJR-GARCH(1,1) com inovações t de Student</b>, estimada por máxima verossimilhança. Câmbio: amostra desde " + data(mo.amostra_fx[0]) + " (início do câmbio flutuante), ν = " + F1.format(fx.nu) + ", persistência " + F2.format(fx.persistencia) + " (meia-vida de " + F0.format(fx.meia_vida_dias) + " dias). BTC: desde " + data(mo.amostra_btc[0]) + ", ν = " + F1.format(bc.nu) + ", persistência " + F2.format(bc.persistencia) + ".",
       "<b>Deriva zero</b>: a mediana não aposta em tendência. O pessimismo vem da cauda, da assimetria do GARCH (choques ruins elevam mais a volatilidade) e dos cenários.",
       "<b>Camada de crise</b>: episódios históricos de 21 dias abaixo do 2,5% pior, além do que o GARCH-t já gera. Câmbio: " + F2.format(mo.crise_fx.taxa_anual) + " crise extra por ano, choque mediano de " + pct(Math.exp(-mo.crise_fx.severidade) - 1, 0) + " no dólar, com " + F0.format(mo.crise_fx.frac_devolvida * 100) + "% devolvidos em 126 dias. BTC: " + F2.format(mo.crise_btc.taxa_anual) + " por ano, " + pct(Math.exp(mo.crise_btc.severidade) - 1, 0) + ", " + F0.format(mo.crise_btc.frac_devolvida * 100) + "% devolvidos.",
+      (mo.recal ? "<b>Recalibração da cauda ruim</b>, estimada no histórico: quando o modelo, olhando para trás, deixou o realizado passar do P10 em mais de 10% das vezes, a cauda é alargada na mesma proporção (fator k, entre 1 e 2). Câmbio: k = " + HZ.map(function (z) { return F2.format(mo.recal.usdbrl[z].k) + " (" + z + "d)"; }).join(", ") + ", porque o real cai mais depressa do que sobe. BTC: k = " + F2.format(mo.recal.btcusd["30"].k) + " em todos os horizontes; o histórico não pede correção. Com k = 1,4, o P10 exibido é o quantil 7,1% do modelo." : ""),
       "<b>Correlação</b> entre os choques do real e do BTC por cópula t: " + F2.format(mo.rho_250d) + " na janela de 250 dias. Nos estresses, sobe para pelo menos " + F2.format(mo.rho_estresse_p95_63d) + " (percentil 95 da janela de 63 dias) com cópula de " + F0.format(mo.nu_copula_estresse) + " graus de liberdade, que junta as caudas.",
       "<b>BTC/BRL nunca é projetado sozinho</b>: em cada trajetória, BTC/BRL = BTC/USD × USD/BRL.",
       "<b>Sem previsão pontual</b>: toda saída é distribuição (P50, P10, P5, P1), e o P90 aparece só como referência do lado favorável.",
       "<b>Probabilidade de risk-off conjunto</b> na base: real perde mais de 10% e BTC cai mais de 30% em 365 dias em " + pct(mo.prob_riskoff_conjunto_365d).replace("+", "") + " das trajetórias."
     ];
-    el("premissas").innerHTML = itens.map(function (t) { return "<li>" + t + "</li>"; }).join("");
+    el("premissas").innerHTML = itens.filter(Boolean).map(function (t) { return "<li>" + t + "</li>"; }).join("");
     el("fontes").innerHTML = '<thead><tr><th scope="col">Série</th><th scope="col">Fonte</th><th scope="col">Último dado</th><th scope="col">Coletado em</th></tr></thead><tbody>' +
       P.fontes.map(function (f) {
         return '<tr><td>' + esc(f.serie) + '</td><td><a href="' + esc(f.url) + '" rel="noopener">' + esc(f.fonte) + '</a></td><td>' + (f.ultimo_dado ? data(String(f.ultimo_dado)) : "—") + '</td><td>' + esc(f.coletado_em.replace("T", " ").replace("+00:00", " UTC")) + '</td></tr>';
@@ -382,24 +444,23 @@
 
   /* ---------- seletor de ativo compartilhado ---------- */
   function ligarAtivo() {
-    document.querySelectorAll('[data-grupo="ativo"] .seg__btn').forEach(function (b) {
+    var bts = document.querySelectorAll('[data-grupo="ativo-heat"] .seg__btn');
+    bts.forEach(function (b) {
       b.addEventListener("click", function () {
-        estado.ativo = b.getAttribute("data-ativo");
-        document.querySelectorAll('[data-grupo="ativo"] .seg__btn').forEach(function (o) {
-          o.setAttribute("aria-pressed", String(o.getAttribute("data-ativo") === estado.ativo));
-        });
-        leque(); tabela(); heat();
+        estado.ativoHeat = b.getAttribute("data-ativo");
+        bts.forEach(function (o) { o.setAttribute("aria-pressed", String(o.getAttribute("data-ativo") === estado.ativoHeat)); });
+        heat();
       });
     });
   }
 
   function iniciar(dados) {
     P = dados;
-    hero(); opcoes(); ligarAtivo(); leque(); tabela(); heat(); cenarios(); gatilhos(); backtest(); metodo();
-    var ultimaL = 0;
+    hero(); opcoes(); ligarAtivo(); leques(); heat(); cenarios(); gatilhos(); backtest(); metodo();
+    var ultimaL = el("leques").clientWidth;
     window.addEventListener("resize", function () {
-      var w = el("leque").clientWidth;
-      if (Math.abs(w - ultimaL) > 24) { ultimaL = w; leque(); }
+      var w = el("leques").clientWidth;
+      if (Math.abs(w - ultimaL) > 24) { ultimaL = w; leques(); }
     });
   }
 

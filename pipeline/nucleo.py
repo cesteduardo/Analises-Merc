@@ -233,15 +233,16 @@ def estimar_crise(x, janela=21, q=0.025, separacao=126, g=None, seed=7):
                 episodios=[int(i) for i in eps_fim])
 
 
-def simular_com_crise(g, s2_0, eps, mu, crise, rng, ativo=True):
+def simular_com_crise(g, s2_0, eps, mu, crise, rng, ativo=True, mu_trilha=None):
     """GARCH-t com uma camada de crise: em cada trajetória, o início de uma crise
     chega como processo de Poisson (taxa anual estimada). Ao começar, a variância
     salta para o nível típico das crises históricas e, por `janela` dias, a
     trajetória recebe a deriva da severidade mediana histórica."""
     n, h = eps.shape
     mu = np.broadcast_to(np.asarray(mu, dtype=float), (h,))
+    extra = 0.0 if mu_trilha is None else np.asarray(mu_trilha, dtype=float)[:, None]
     if not ativo or crise is None or crise["taxa_anual"] <= 0:
-        return simular_garch(g, s2_0, eps, mu)
+        return simular_garch(g, s2_0, eps, mu) + extra
     p_dia = 1 - np.exp(-crise["taxa_anual"] / 252)
     inicio = rng.geometric(p_dia, size=n) - 1  # passo de início (pode passar de h)
     J = crise["janela"]
@@ -258,4 +259,27 @@ def simular_com_crise(g, s2_0, eps, mu, crise, rng, ativo=True):
         e = np.sqrt(s2) * eps[:, t]
         x[:, t] = mu[t] + e + np.where(em, d, 0.0) + np.where(dev, dv, 0.0)
         s2 = g.omega + (g.alpha + g.gamma * (e < 0)) * e * e + g.beta * s2
-    return x
+    return x + extra
+
+
+def estimar_deriva_incerta(x, g, crise=None, H=252, anos_sim=400, seed=11):
+    """Incerteza de tendência: quanto o segundo momento dos retornos acumulados
+    em H dias (observado) excede o que o próprio modelo (GARCH-t + camada de
+    crise) gera. O excesso vira uma deriva aleatória por trajetória,
+    mu ~ N(0, s2) por dia, com s2 = excesso / H². Só dados da janela de ajuste.
+
+    Interpretação: séries com tendências persistentes (o real em 2002, 2015 ou
+    2018–20) têm variância de longo prazo maior que a soma das variâncias
+    diárias; o GARCH, que olha um dia de cada vez, não enxerga isso."""
+    x = np.asarray(x, dtype=float)
+    S = pd.Series(x).rolling(H).sum().dropna().values
+    m2_obs = float(np.mean(S ** 2))
+    rng = np.random.default_rng(seed)
+    T = 252 * anos_sim
+    e = t_padronizada_ppf(np.clip(rng.random((1, T)), 1e-12, 1 - 1e-12), g.nu)
+    sim = simular_com_crise(g, g.var_alvo, e, 0.0, crise, rng)[0] if crise else simular_garch(g, g.var_alvo, e, 0.0)[0]
+    Sm = pd.Series(sim).rolling(H).sum().dropna().values
+    m2_mod = float(np.mean(Sm ** 2))
+    s2 = max(0.0, m2_obs - m2_mod) / H ** 2
+    return dict(H=H, m2_obs=m2_obs, m2_modelo=m2_mod, razao=m2_obs / m2_mod,
+                s_diaria=float(np.sqrt(s2)), s_anual=float(np.sqrt(s2) * 252))

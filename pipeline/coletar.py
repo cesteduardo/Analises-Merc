@@ -116,6 +116,11 @@ def focus():
         out += json.loads(get(url, timeout=180))["value"]
     salvar("focus_anuais", "BCB/Focus — Expectativas de Mercado Anuais (mediana, base de cálculo 0)",
            base + "ExpectativasMercadoAnuais", out)
+    # extrato versionado: só a última data, com as colunas que o painel usa
+    ult = max(x["Data"] for x in out)
+    salvar("focus_resumo", "BCB/Focus — Expectativas de Mercado Anuais (mediana, base de cálculo 0) — extrato da última data",
+           base + "ExpectativasMercadoAnuais",
+           [{k: x[k] for k in ("Indicador", "Data", "DataReferencia", "Mediana")} for x in out if x["Data"] == ult])
     q = {"$filter": "Indicador eq 'IPCA' and Suavizada eq 'S' and baseCalculo eq 0 and Data ge '2014-01-01'",
          "$select": "Indicador,Data,Mediana", "$format": "json", "$top": "100000"}
     url = base + "ExpectativasMercadoInflacao12Meses?" + urllib.parse.urlencode(q, quote_via=urllib.parse.quote)
@@ -142,6 +147,9 @@ def tesouro():
             out.append([f"{y}-{m}-{d}", tipo, f"{yv}-{mv}-{dv}", tx_compra])
     salvar("tesouro_direto", "Tesouro Transparente — Taxas dos títulos ofertados pelo Tesouro Direto (taxa de compra, % a.a.)",
            url, out, {"colunas": ["data_base", "titulo", "vencimento", "taxa_compra"], "cabecalho_original": hdr})
+    ult = max(r[0] for r in out)
+    salvar("tesouro_resumo", "Tesouro Transparente — Taxas dos títulos ofertados pelo Tesouro Direto (taxa de compra, % a.a.) — extrato da última data-base",
+           url, [r for r in out if r[0] == ult], {"colunas": ["data_base", "titulo", "vencimento", "taxa_compra"]})
 
 
 if __name__ == "__main__":

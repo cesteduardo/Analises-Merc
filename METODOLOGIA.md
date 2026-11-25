@@ -22,6 +22,8 @@ Toda saída é uma distribuição, nunca um valor único.
 
 O **pior caso plausível** do painel é o P1 da distribuição-base em 365 dias. Os cenários de estresse mostram, ao lado, o que aconteceria se episódios reais se repetissem a partir dos preços de hoje.
 
+**Âncora histórica.** Abaixo de cada leque, a linha "Pior histórico" traz a pior variação observada em cada horizonte, na direção ruim (câmbio desde 01/03/1999; BTC desde 26/01/2015). Ela serve para julgar a plausibilidade do P1: em 30 dias o P1 fica aquém do pior mês da história (setembro de 2008 no câmbio, janeiro de 2018 no BTC), porque um mês tão ruim é mais raro que 1 em 100; em 365 dias, o P1 do câmbio passa do pior ano observado (+74%, de set/2014 a set/2015). É uma consequência da recalibração da cauda (4.5), não uma previsão de que isso vá acontecer, e está exposta para que o leitor a pese.
+
 O **drawdown máximo** é a maior queda desde o pico ao longo do caminho, até cada horizonte. Para USD/BRL, é a maior perda do real contra o dólar (queda máxima de BRL/USD). O mapa de calor mostra o P5 (a queda que só 1 em 20 trajetórias ultrapassa) e, menor, a mediana.
 
 ## 3. Dados
@@ -49,6 +51,7 @@ Só fontes públicas. Cada série é gravada com URL e data e hora de coleta (`d
 - O **DXY** da ICE não é publicado no FRED. Usamos o índice amplo do Fed (DTWEXBGS) como proxy público.
 - A série da Coinbase no FRED tem lacunas e cotações isoladas antes da abertura da bolsa da Coinbase (por exemplo, US$ 120 em 14/01/2015). Por isso o BTC começa em 26/01/2015.
 - O BTC é alinhado às datas da PTAX: em cada dia útil brasileiro usamos o fechamento UTC do mesmo dia. O retorno de segunda-feira inclui o fim de semana. A PTAX é formada por volta das 13h de Brasília, então há algumas horas de defasagem entre as duas séries, o que tende a atenuar a correlação medida.
+- Os brutos do **Tesouro Direto** e do **Focus anual** são grandes demais para o repositório. A coleta grava, junto com eles, um extrato da última data (`tesouro_resumo.json`, `focus_resumo.json`), que é versionado; sem o bruto completo, o painel usa o extrato. O extrato atual foi reconstruído a partir da coleta completa de 25/11/2026 e traz essa nota no próprio arquivo.
 - O **fluxo de ETFs de BTC** está na lista de gatilhos, mas nenhuma das fontes autorizadas o publica. Ele aparece como "sem dado" e não entra no modelo.
 - O **halving** é estimado por cálculo próprio (bloco 1.050.000, a 10 minutos por bloco desde o halving de 20/04/2024), sem série externa. Cai fora da janela de 365 dias e não entra no modelo.
 
@@ -70,7 +73,7 @@ Para cada ativo:
 - O termo γ dá **assimetria**: choques ruins (real caindo, BTC caindo) elevam mais a volatilidade seguinte.
 - Estimação por máxima verossimilhança com *variance targeting*: ω é fixado para que a variância de longo prazo seja a variância amostral da janela de estimação.
 - A persistência α + γ/2 + β é limitada a 0,99 para evitar volatilidade integrada, que faria o cone explodir sem base empírica.
-- Amostras: câmbio desde 2003 (inclui 2008, 2013, 2015, 2018, 2020 e 2024); BTC desde 26/01/2015.
+- Amostras: câmbio desde 01/03/1999, início do câmbio flutuante (inclui 2001, 2002, 2008, 2013, 2015, 2018, 2020 e 2024). Janeiro e fevereiro de 1999 ficam fora porque são a transição do regime de bandas, não um choque dentro do regime atual. A v1 começava em 2003 e deixava de fora 2001 e 2002, embora usasse 2002 como análogo do cenário 2026–27. BTC desde 26/01/2015.
 
 ### 4.3 Deriva zero
 
@@ -86,7 +89,23 @@ O GARCH-t subestima episódios em que a perda se acumula por semanas. A camada d
 
 Os valores estimados (taxa extra por ano, choque mediano, fração devolvida) aparecem no painel, na seção de premissas.
 
-### 4.5 Correlação e cópula
+### 4.5 Recalibração da cauda ruim
+
+Um diagnóstico dentro da própria amostra de ajuste (o modelo estimado com todos os dados, aplicado a origens passadas a cada 10 dias úteis) mostrou um defeito sistemático no câmbio: o realizado passou do P10 ruim em 13% a 19% das origens, conforme o horizonte, enquanto passou do P90 favorável em 10% a 12%. O real cai mais depressa do que sobe, e um GARCH com inovações simétricas, mesmo com o termo de assimetria, não reproduz isso inteiro.
+
+A correção é deliberadamente simples:
+
+- para cada ativo e horizonte, `k = (frequência abaixo do P10 dentro da amostra) / 10%`, limitado entre 1 e 2;
+- o painel passa a ler P10, P5 e P1 nos níveis 10%/k, 5%/k e 1%/k da simulação. Com k = 1,4, o P10 exibido é o quantil 7,1% do modelo;
+- entre os horizontes, k é interpolado linearmente nos dias úteis; antes de 21 dias vale o de 30 dias. O drawdown usa o mesmo k;
+- **só torna o painel mais pessimista, nunca menos** (k ≥ 1). Essa assimetria é uma premissa ligada ao objetivo do painel, não uma estimativa;
+- a mediana (P50) e o lado favorável (P90) não são recalibrados.
+
+No backtest, k é estimado **só com dados anteriores a cada corte**, com horizontes que terminam antes do corte; o período de teste não entra nele. Para BTC e BTC/BRL, o histórico dentro da amostra não pede correção (k = 1 em todos os horizontes e nos dois cortes): a cauda ruim do BTC já é bem servida pela t com ν ≈ 3.
+
+Limite conhecido: k é medido no P10 e estendido proporcionalmente ao P5 e ao P1. Dentro da amostra, a frequência abaixo do P5 do câmbio também passa do esperado (8% a 12% contra 5%), o que apoia a extensão, mas o P1 não tem dados suficientes para ser verificado diretamente.
+
+### 4.6 Correlação e cópula
 
 Os choques padronizados dos dois ativos são ligados por uma **cópula t**, que permite caudas conjuntas (os dois piores dias acontecendo juntos):
 
@@ -94,11 +113,11 @@ Os choques padronizados dos dois ativos são ligados por uma **cópula t**, que 
 - graus de liberdade da cópula: estimados por máxima verossimilhança. Na amostra completa o estimador vai ao limite superior (60), o que equivale a uma cópula quase gaussiana: os dados não mostram dependência de cauda forte no dia a dia.
 - **Nos estresses**, a correlação sobe para o maior valor entre a do episódio e o percentil 95 histórico da correlação móvel de 63 dias, e a cópula passa a ter 4 graus de liberdade. Essa é uma piora deliberada (premissa), não uma estimativa.
 
-### 4.6 BTC/BRL
+### 4.7 BTC/BRL
 
 Nunca é projetado sozinho. Em cada trajetória simulada, `BTC/BRL = BTC/USD × USD/BRL`. Assim, um choque que derruba o real atenua a queda do BTC em reais, e um choque que derruba os dois ao mesmo tempo aparece com a força correta.
 
-### 4.7 Simulação
+### 4.8 Simulação
 
 20.000 trajetórias de 252 dias úteis, semente fixa. Os horizontes de 30, 90, 180 e 365 dias corridos são lidos nos passos 21, 63, 126 e 252. O eixo do gráfico é em dias úteis sem feriados; as datas exibidas são aproximadas.
 
@@ -122,6 +141,8 @@ Cada cenário é uma distribuição condicional: "se as condições do episódio
 
 O cenário 2026–27 é uma **hipótese**, não uma reconstrução. Ele não afirma nada sobre o resultado da eleição; descreve uma transição com dúvida sobre o arcabouço fiscal.
 
+**Validação cruzada dos estresses.** Um cenário reconstruído contém o próprio episódio por construção, o que não prova nada. O teste útil é outro: cada choque real nomeado (Covid, inverno cripto, pacote fiscal de 2024) é comparado com o P5 da distribuição-base projetada na véspera e com o P5 dos cenários que **não** foram construídos com aquele episódio. O resultado está no painel e em `relatorios/CALIBRACAO.md`.
+
 **"O que precisaria acontecer"**: para cada cenário reconstruído, a tabela compara o que os gatilhos marcaram no episódio (VIX, dólar global, Selic real, dívida bruta, fluxo cambial, correlação) com os valores de hoje. Para o cenário construído, as condições são marcadas como hipóteses.
 
 ## 6. Gatilhos monitorados
@@ -142,21 +163,32 @@ Cada gatilho tem uma regra explícita de status (normal, atenção, alerta). Os 
 
 ### 7.1 Backtest fora da amostra
 
-- **Cortes**: parâmetros estimados só com dados até 31/12/2017 e até 31/12/2020, e congelados.
+- **Cortes**: parâmetros (GARCH, camada de crise, cópula e fator de recalibração) estimados só com dados até 31/12/2017 e até 31/12/2020, e congelados.
 - **Origens**: a cada 5 dias úteis, de 2018 a 2020 (corte 2018) e de 2021 ao último dado com horizonte completo (corte 2021). Em cada origem, a volatilidade é filtrada com os dados até ali e a correlação usa os 250 dias anteriores.
-- **Métrica**: frequência com que o realizado ficou pior que o P10. Meta: entre 8% e 12%.
-- **Choques reais**: posição do realizado na distribuição projetada na véspera da Covid (14/02/2020), do inverno cripto (10/11/2021) e do pacote fiscal (30/09/2024). O critério é que o P5 contenha o choque.
-- **Limitação**: as origens se sobrepõem, então o número de observações independentes é pequeno, sobretudo em 365 dias. O relatório traz intervalos de confiança.
+- **Métrica**: frequência com que o realizado ficou pior que o P10. Meta do projeto: entre 8% e 12%.
+- **Incerteza**: as origens se sobrepõem, então o número de observações independentes é cerca de n × 5 / passos do horizonte. Em 365 dias, cada corte tem de 3 a 4 observações independentes; os dois juntos, cerca de 7. Os intervalos de confiança (Wilson, 95%) usam esse n efetivo.
 
-### 7.2 Estado atual da calibração
+### 7.2 Critério de aprovação
 
-**Ainda não calibrado.** Resultados completos em `relatorios/CALIBRACAO.md`; resumo:
+Escrito nesta rodada, depois de ver os resultados da v1; não é um pré-registro.
 
-- No **corte 2018**, o modelo subestima a desvalorização do real de 2018 a 2020: o realizado ficou pior que o P10 em 20% a 34% das origens, conforme o horizonte. Nenhuma variante testada resolveu isso sem ficar pessimista demais no corte 2021.
-- No **corte 2021**, BTC/USD e BTC/BRL ficam perto da meta (8% a 12%); USD/BRL fica dentro da meta em 30 dias e pessimista demais nos horizontes longos.
-- **Choques reais**: a Covid ficou além do P1 em 30 dias para BTC e câmbio, e em 90 dias para o câmbio. O inverno cripto ficou perto do P5 em 30 e 180 dias e entre o P5 e o P1 em 365 dias. Esses episódios entram como cenários de estresse justamente porque a distribuição-base não os contém.
+1. **Meta principal, agregada.** Para cada ativo × horizonte, com os dois cortes juntos (2018 a 2026), a frequência abaixo do P10 fica entre 8% e 12%.
+2. **Por corte, sem falha significativa.** Em cada corte, nenhuma célula tem IC95 que exclua 10%. A faixa de 8% a 12% por corte é mostrada, mas não é exigida: com n = 4, o IC95 de uma frequência de 10% vai de 0% a 55%, e exigir a faixa estreita nessas células seria pedir ao teste uma precisão que ele não tem.
+3. **P5 e choques reais.** Cada choque real nomeado cabe no P5 da distribuição-base **ou** no P5 de um estresse construído sem aquele episódio.
 
-### 7.3 Crítico cego
+Por que não exigir que o P5 da base contenha todos os choques: os choques nomeados são, por escolha, os piores episódios do período de teste. No câmbio, o mês que começa na véspera da Covid (+18%) está entre os piores de 2018 a 2026, num universo de cerca de 450 origens. Uma distribuição que pusesse esse mês acima do seu P5 teria de ser tão larga que quase nada cairia abaixo do P10, e o critério 1 falharia por excesso de pessimismo. Os estresses existem para cobrir o que a base, calibrada, não cobre.
+
+### 7.3 Estado atual da calibração
+
+**Calibração parcial.** Resultados completos e todas as variantes testadas em `relatorios/CALIBRACAO.md`; resumo da variante em uso (`v3_1999_crise_recal`):
+
+- **Critério 1: 7 de 12** células agregadas na faixa (v1: 6 de 12). Fora da faixa: USD/BRL em 90 e 180 dias (7,6% e 7,3%, pessimista), BTC/USD em 30 dias (13,0%, otimista) e BTC/USD e BTC/BRL em 365 dias (7,8%, pessimista). Em todas, o IC95 contém 10%.
+- **Critério 2: atendido.** Nenhuma das 24 células por corte tem desvio estatisticamente significativo (v1: 1, o câmbio em 30 dias no corte 2018).
+- **Critério 3: um choque sem cobertura.** A queda de 48% do BTC em 30 dias na Covid fica além do P5 da base e de todos os estresses independentes. Os demais choques cabem na base ou num estresse independente.
+
+O painel declara esse estado no topo e na seção de backtest. Forçar as cinco células restantes para dentro da faixa exigiria ajustar o modelo ao próprio período de teste.
+
+### 7.4 Crítico cego
 
 Um revisor que vê apenas o painel publicado e este documento, nunca o código, aponta premissas ocultas, pessimismo exagerado ou fraco e gráficos que enganam. As revisões ficam em `relatorios/CRITICO.md`.
 
@@ -167,15 +199,17 @@ Um revisor que vê apenas o painel publicado e este documento, nunca o código, 
 - **Correlação**: a correlação medida entre real e BTC é baixa (cerca de 0,2) e instável; a defasagem de horário entre a PTAX e o fechamento do BTC tende a reduzi-la.
 - **Dados de BTC antes de 2017** vêm de uma única corretora (Coinbase), com liquidez menor.
 - **Gatilhos** não alimentam o modelo. Um gatilho em alerta não muda as faixas; ele indica que um dos estresses ficou mais relevante.
-- **Escolhas guiadas pelo backtest**: a variante final foi escolhida olhando os resultados do teste, o que é uma forma branda de sobreajuste. Todas as variantes testadas estão registradas.
+- **Escolhas guiadas pelo backtest**: a variante final foi escolhida olhando os resultados do teste, o que é uma forma branda de sobreajuste. Todas as variantes testadas (11, em três rodadas) estão registradas em `pipeline/variantes.py` e no relatório de calibração. O fator de recalibração, em si, nunca vê o período de teste.
+- **Recalibração assimétrica**: k só pode alargar a cauda ruim. Se o histórico um dia indicar que o modelo é pessimista demais, o painel não se corrige sozinho nessa direção.
+- **P1 do câmbio em 365 dias acima do pior ano observado**: efeito da recalibração estendida ao P1 (4.5). O painel mostra a âncora histórica ao lado.
 
 ## 9. Como atualizar
 
 ```
 pip install numpy pandas scipy
 python3 pipeline/coletar.py              # baixa as séries
-python3 pipeline/backtest.py zero 0 crise # backtest da variante em uso
-python3 pipeline/projetar.py             # gera projections.json
+python3 pipeline/backtest.py v3_1999_crise_recal   # backtest da variante em uso (~5 min)
+python3 pipeline/projetar.py             # gera projections.json (~3 min na 1ª vez do dia)
 python3 pipeline/relatorio.py            # gera relatorios/CALIBRACAO.md
 ```
 

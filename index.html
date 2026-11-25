@@ -33,31 +33,20 @@
       <div class="selo" id="selo"></div>
     </section>
 
-    <!-- 2. Leque -->
+    <!-- 2. Leques -->
     <section class="panel glass" aria-labelledby="h-leque">
       <div class="head">
-        <p class="eyebrow">Distribuição em 365 dias</p>
-        <h2 id="h-leque">O cone de risco, com a cauda P1 em destaque</h2>
-        <p class="sub">Cada faixa é uma probabilidade, não uma previsão. A linha vermelha é o P1: só 1 em cada 100 trajetórias simuladas termina pior que ela.</p>
+        <p class="eyebrow">Distribuição em até 365 dias</p>
+        <h2 id="h-leque">O cone de risco de cada ativo, com a cauda P1 em destaque</h2>
+        <p class="sub">Cada faixa é uma probabilidade, não uma previsão. A linha vermelha é o P1: só 1 em cada 100 trajetórias simuladas termina pior que ela. Passe o cursor ou use as setas sobre um gráfico para ler qualquer dia; os três acompanham.</p>
       </div>
       <div class="controles">
-        <div class="seg glass" role="group" aria-label="Ativo" data-grupo="ativo">
-          <button class="seg__btn label" type="button" data-ativo="usdbrl" aria-pressed="true">USD/BRL</button>
-          <button class="seg__btn label" type="button" data-ativo="btcusd" aria-pressed="false">BTC/USD</button>
-          <button class="seg__btn label" type="button" data-ativo="btcbrl" aria-pressed="false">BTC/BRL</button>
-        </div>
-        <label class="select glass label" for="cenario-sel"><span class="sr-only">Distribuição</span>
+        <label class="select glass label" for="cenario-sel"><span class="sr-only">Distribuição exibida</span>
           <select id="cenario-sel"></select>
         </label>
       </div>
-      <div class="leitura" id="leitura" aria-live="polite"></div>
-      <figure class="chart" id="leque-fig">
-        <div class="chart__svg" id="leque"></div>
-        <figcaption class="legenda" id="legenda"></figcaption>
-      </figure>
-      <div class="table-wrap">
-        <table class="quantis" id="tabela-quantis"></table>
-      </div>
+      <div class="leques" id="leques"></div>
+      <p class="legenda" id="legenda"></p>
       <p class="note" id="nota-quantis"></p>
     </section>
 
@@ -68,7 +57,7 @@
         <h2 id="h-dd">Mapa de calor do drawdown máximo por horizonte</h2>
         <p class="sub" id="dd-sub">Mesmo quando o ponto final se recupera, o caminho pode cair muito antes. Cada célula mostra a queda máxima desde o pico que 1 em cada 20 trajetórias ultrapassa (P5); abaixo, a mediana.</p>
       </div>
-      <div class="seg glass" role="group" aria-label="Ativo do mapa" data-grupo="ativo">
+      <div class="seg glass" role="group" aria-label="Ativo do mapa" data-grupo="ativo-heat">
         <button class="seg__btn label" type="button" data-ativo="usdbrl" aria-pressed="true">USD/BRL</button>
         <button class="seg__btn label" type="button" data-ativo="btcusd" aria-pressed="false">BTC/USD</button>
         <button class="seg__btn label" type="button" data-ativo="btcbrl" aria-pressed="false">BTC/BRL</button>
@@ -105,9 +94,14 @@
         <h2 id="h-bt">Backtest: o modelo teria acertado a cauda?</h2>
         <p class="sub" id="bt-sub"></p>
       </div>
+      <ul class="veredito" id="bt-veredito"></ul>
       <div class="table-wrap">
         <table class="bt" id="bt"></table>
       </div>
+      <details class="fontes">
+        <summary class="label">Cada corte separado</summary>
+        <div class="bt-cortes" id="bt-cortes"></div>
+      </details>
       <div class="table-wrap">
         <table class="bt" id="bt-choques"></table>
       </div>
