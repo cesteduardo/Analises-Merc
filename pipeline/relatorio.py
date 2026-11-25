@@ -86,7 +86,7 @@ def main():
            "O critério foi escrito nesta rodada (v2), depois de ver os resultados da v1, e por isso não é um pré-registro. Ele separa o que o teste consegue medir do que não consegue:", "",
            "1. **Meta principal, agregada**: para cada ativo × horizonte, com as origens dos dois cortes juntas (2018 a 2026), a frequência abaixo do P10 deve ficar entre 8% e 12%.",
            "2. **Por corte, sem falha significativa**: em cada corte, nenhuma célula pode ter IC95 que exclua 10%. A meta de 8%–12% por corte é mostrada, mas nos horizontes de 180 e 365 dias cada corte tem de 3 a 10 observações independentes, e o IC95 de uma frequência de 10% com n = 4 vai de 0% a 55%: a faixa de 8%–12% é mais estreita que o próprio ruído.",
-           "3. **P5 e choques reais**: frequência agregada abaixo do P5 perto de 5%; cada choque real nomeado deve caber no P5 da distribuição-base **ou** no P5 de algum cenário de estresse construído **sem** aquele episódio (validação cruzada dos estresses).", ""]
+           "3. **P5 e choques reais**: frequência agregada abaixo do P5 perto de 5%; cada choque real nomeado deve caber no P5 da distribuição-base **ou** no P5 de algum cenário de estresse construído só com dados anteriores ao choque (validação cruzada dos estresses).", ""]
 
     # ---------- resumo das variantes ----------
     out += ["## Todas as variantes testadas", "",
@@ -147,7 +147,7 @@ def main():
     out.append("")
     proj = json.loads((RAIZ / "projections.json").read_text())
     nomes_c = {c["id"]: f"{c['nome']} ({c['periodo']})" for c in proj["cenarios"]}
-    out += ["**Validação cruzada dos estresses.** Para cada choque, a variação realizada em cada horizonte é comparada com o P5 dos cenários de estresse que **não** foram construídos com aquele episódio (o pacote fiscal de 2024 é análogo do cenário 2026–27, que fica de fora nesse caso).", "",
+    out += ["**Validação cruzada dos estresses.** Para cada choque, a variação realizada em cada horizonte é comparada com o P5 dos cenários de estresse construídos **só com dados anteriores à véspera** do choque. A Covid só pode ser coberta pelo estresse de 2015; o inverno cripto, pelos de 2015 e da Covid; o pacote fiscal de 2024, pelos três reconstruídos (o cenário 2026–27 usa dados até 2025).", "",
             "| Choque | Ativo | 30 dias | 90 dias | 180 dias | 365 dias |", "|---|---|---|---|---|---|"]
     falhas_ct = []
     for c in proj["contencao_estresses"]:

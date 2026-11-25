@@ -38,7 +38,7 @@
       <div class="head">
         <p class="eyebrow">Distribuição em até 365 dias</p>
         <h2 id="h-leque">O cone de risco de cada ativo, com a cauda P1 em destaque</h2>
-        <p class="sub">Cada faixa é uma probabilidade, não uma previsão. A linha vermelha é o P1: só 1 em cada 100 trajetórias simuladas termina pior que ela. Passe o cursor ou use as setas sobre um gráfico para ler qualquer dia; os três acompanham.</p>
+        <p class="sub">Cada faixa é uma probabilidade, não uma previsão. A linha vermelha é o P1: o nível com probabilidade estimada de 1% de ser ultrapassado na direção ruim. Passe o cursor ou use as setas sobre um gráfico para ler qualquer dia; os três acompanham.</p>
       </div>
       <div class="controles">
         <label class="select glass label" for="cenario-sel"><span class="sr-only">Distribuição exibida</span>
@@ -62,6 +62,7 @@
         <button class="seg__btn label" type="button" data-ativo="btcusd" aria-pressed="false">BTC/USD</button>
         <button class="seg__btn label" type="button" data-ativo="btcbrl" aria-pressed="false">BTC/BRL</button>
       </div>
+      <p class="caption" id="heat-cap"></p>
       <div class="table-wrap">
         <table class="heat" id="heat"></table>
       </div>
@@ -95,6 +96,7 @@
         <p class="sub" id="bt-sub"></p>
       </div>
       <ul class="veredito" id="bt-veredito"></ul>
+      <p class="caption" id="bt-cap"></p>
       <div class="table-wrap">
         <table class="bt" id="bt"></table>
       </div>
@@ -102,6 +104,7 @@
         <summary class="label">Cada corte separado</summary>
         <div class="bt-cortes" id="bt-cortes"></div>
       </details>
+      <p class="caption" id="ch-cap"></p>
       <div class="table-wrap">
         <table class="bt" id="bt-choques"></table>
       </div>

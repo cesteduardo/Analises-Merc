@@ -17,7 +17,7 @@ O critério foi escrito nesta rodada (v2), depois de ver os resultados da v1, e 
 
 1. **Meta principal, agregada**: para cada ativo × horizonte, com as origens dos dois cortes juntas (2018 a 2026), a frequência abaixo do P10 deve ficar entre 8% e 12%.
 2. **Por corte, sem falha significativa**: em cada corte, nenhuma célula pode ter IC95 que exclua 10%. A meta de 8%–12% por corte é mostrada, mas nos horizontes de 180 e 365 dias cada corte tem de 3 a 10 observações independentes, e o IC95 de uma frequência de 10% com n = 4 vai de 0% a 55%: a faixa de 8%–12% é mais estreita que o próprio ruído.
-3. **P5 e choques reais**: frequência agregada abaixo do P5 perto de 5%; cada choque real nomeado deve caber no P5 da distribuição-base **ou** no P5 de algum cenário de estresse construído **sem** aquele episódio (validação cruzada dos estresses).
+3. **P5 e choques reais**: frequência agregada abaixo do P5 perto de 5%; cada choque real nomeado deve caber no P5 da distribuição-base **ou** no P5 de algum cenário de estresse construído só com dados anteriores ao choque (validação cruzada dos estresses).
 
 ## Todas as variantes testadas
 
@@ -94,16 +94,16 @@ Percentil do valor realizado na distribuição-base projetada na véspera do cho
 | Pacote fiscal (30/09/2024) | BTC/USD | 87,4 | 95,0 | 82,3 | 90,3 |
 | Pacote fiscal (30/09/2024) | BTC/BRL | 92,5 | 97,2 | 83,8 | 88,5 |
 
-**Validação cruzada dos estresses.** Para cada choque, a variação realizada em cada horizonte é comparada com o P5 dos cenários de estresse que **não** foram construídos com aquele episódio (o pacote fiscal de 2024 é análogo do cenário 2026–27, que fica de fora nesse caso).
+**Validação cruzada dos estresses.** Para cada choque, a variação realizada em cada horizonte é comparada com o P5 dos cenários de estresse construídos **só com dados anteriores à véspera** do choque. A Covid só pode ser coberta pelo estresse de 2015; o inverno cripto, pelos de 2015 e da Covid; o pacote fiscal de 2024, pelos três reconstruídos (o cenário 2026–27 usa dados até 2025).
 
 | Choque | Ativo | 30 dias | 90 dias | 180 dias | 365 dias |
 |---|---|---|---|---|---|
-| Covid | USD/BRL | 18% <br><sub>Crise fiscal</sub> | 32% <br><sub>Crise fiscal, Fiscal e eleitoral</sub> | 27% <br><sub>Crise fiscal, Fiscal e eleitoral</sub> | 25% <br><sub>base</sub> |
+| Covid | USD/BRL | 18% <br><sub>**nenhum**</sub> | 32% <br><sub>**nenhum**</sub> | 27% <br><sub>Crise fiscal</sub> | 25% <br><sub>base</sub> |
 | Covid | BTC/USD | −48% <br><sub>**nenhum**</sub> | −8% <br><sub>base</sub> | 15% <br><sub>base</sub> | 440% <br><sub>base</sub> |
-| Covid | BTC/BRL | −38% <br><sub>Inverno cripto</sub> | 21% <br><sub>base</sub> | 46% <br><sub>base</sub> | 575% <br><sub>base</sub> |
+| Covid | BTC/BRL | −38% <br><sub>**nenhum**</sub> | 21% <br><sub>base</sub> | 46% <br><sub>base</sub> | 575% <br><sub>base</sub> |
 | Inverno cripto | USD/BRL | 2% <br><sub>base</sub> | −3% <br><sub>base</sub> | −6% <br><sub>base</sub> | −3% <br><sub>base</sub> |
 | Inverno cripto | BTC/USD | −27% <br><sub>base</sub> | −32% <br><sub>base</sub> | −55% <br><sub>base</sub> | −73% <br><sub>Covid</sub> |
-| Inverno cripto | BTC/BRL | −26% <br><sub>base</sub> | −34% <br><sub>base</sub> | −58% <br><sub>base</sub> | −74% <br><sub>Covid</sub> |
+| Inverno cripto | BTC/BRL | −26% <br><sub>base</sub> | −34% <br><sub>base</sub> | −58% <br><sub>base</sub> | −74% <br><sub>**nenhum**</sub> |
 | Pacote fiscal de 2024 | USD/BRL | 5% <br><sub>base</sub> | 14% <br><sub>base</sub> | 4% <br><sub>base</sub> | −2% <br><sub>base</sub> |
 | Pacote fiscal de 2024 | BTC/USD | 15% <br><sub>base</sub> | 48% <br><sub>base</sub> | 30% <br><sub>base</sub> | 87% <br><sub>base</sub> |
 | Pacote fiscal de 2024 | BTC/BRL | 20% <br><sub>base</sub> | 68% <br><sub>base</sub> | 36% <br><sub>base</sub> | 83% <br><sub>base</sub> |
@@ -114,7 +114,7 @@ Cada célula traz a variação realizada e quem a contém no P5: “base” quan
 
 - Critério 1 (agregado, 8%–12%): **não atendido** — 7 de 12 células na faixa.
 - Critério 2 (nenhuma falha significativa por corte): **atendido** — 0 de 24.
-- Critério 3 (choques no P5 da base ou de um estresse independente): **não atendido** — sem cobertura: Covid · BTC/USD · 30 dias.
+- Critério 3 (choques no P5 da base ou de um estresse independente): **não atendido** — sem cobertura: Covid · USD/BRL · 30 dias; Covid · USD/BRL · 90 dias; Covid · BTC/USD · 30 dias; Covid · BTC/BRL · 30 dias; Inverno cripto · BTC/BRL · 365 dias.
 
 Células agregadas fora da faixa: BTC/BRL 365 dias (7,8%), BTC/USD 30 dias (13,0%), BTC/USD 365 dias (7,8%), USD/BRL 90 dias (7,6%), USD/BRL 180 dias (7,3%). Todas têm IC95 que contém 10%, isto é, o teste não distingue essas frequências de uma calibração exata. Empurrá-las para dentro da faixa exigiria ajustar o modelo ao próprio período de teste, o que trocaria um erro pequeno e visível por sobreajuste invisível.
 

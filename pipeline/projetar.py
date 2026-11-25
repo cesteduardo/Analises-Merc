@@ -20,6 +20,7 @@ QB = {"P50": .50, "P10": .10, "P5": .05, "P1": .01, "P90f": .90}  # na direção
 CONFIG_BACKTEST = "v3_1999_crise_recal"
 from variantes import VARIANTES
 CFG = VARIANTES[CONFIG_BACKTEST]
+FRAC_DISP = 0.5  # fração da volatilidade do episódio usada como dispersão em volta da réplica
 N_DENTRO, PASSO_DENTRO, K_MAX = 2000, 10, 2.0
 
 
@@ -36,7 +37,7 @@ def meta_serie(nome):
     d = json.loads((RAW / f"{nome}.json").read_text())
     ult = None
     if d["dados"] and isinstance(d["dados"][-1], list):
-        ult = max(str(x[0]) for x in d["dados"])
+        ult = max(str(x[0])[:10] for x in d["dados"] if str(x[0])[:10] <= d["coletado_em"][:10])
     elif d["dados"] and isinstance(d["dados"][-1], dict) and "Data" in d["dados"][-1]:
         ult = max(str(x["Data"]) for x in d["dados"])
     return {"serie": nome, "fonte": d["fonte"], "url": d["url"], "coletado_em": d["coletado_em"],
@@ -53,6 +54,13 @@ def niveis(sf, sb, s0f, s0b):
 def ruim(a, lv):
     """Log-nível na direção ruim (baixo = pior) para quantis homogêneos."""
     return -np.log(lv) if a == "usdbrl" else np.log(lv)
+
+
+def wilson(p, n, z=1.96):
+    d = 1 + z * z / n
+    c = (p + z * z / (2 * n)) / d
+    m = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return max(0.0, c - m), min(1.0, c + m)
 
 
 def k_no_passo(kh, t):
@@ -84,11 +92,21 @@ def resumo_dist(a, lv, s0, kh=None):
     return tab
 
 
-def leque(a, lv, s0, passo=3, kh=None):
+def leque(a, lv, s0, passo=3, kh=None, suavizar=7):
+    """Quantis dia a dia para o gráfico. As caudas são suavizadas por média
+    móvel centrada de `suavizar` dias úteis para tirar o ruído do Monte Carlo
+    (o P1 recalibrado do câmbio usa ~100 trajetórias); nos passos dos
+    horizontes vale o valor exato, igual ao das tabelas."""
+    todos = pd.DataFrame([quantis_nivel(a, lv[:, t], k_no_passo(kh, t)) for t in range(H_MAX)])
+    if suavizar and suavizar > 1:
+        liso = np.exp(np.log(todos).rolling(suavizar, center=True, min_periods=1).mean())
+    else:
+        liso = todos
+    exatos = {p - 1 for p in HORIZ_PASSOS.values()}
     pts = []
-    for t in list(range(0, H_MAX, passo)) + [H_MAX - 1]:
-        q = quantis_nivel(a, lv[:, t], k_no_passo(kh, t))
-        pts.append({"d": t + 1, **{k: round(v, 6) for k, v in q.items()}})
+    for t in sorted(set(list(range(0, H_MAX, passo)) + [H_MAX - 1]) | exatos):
+        q = todos.iloc[t] if t in exatos else liso.iloc[t]
+        pts.append({"d": t + 1, **{k: round(float(v), 6) for k, v in q.items()}})
     return [{"d": 0, **{k: s0 for k in QB}}] + pts
 
 
@@ -154,7 +172,10 @@ def estimar_recal(gf, gb, cf, cb, xfx, s2f, r, s2b, zf, zb, df, fx_niv, nu_c, rn
         for h in HORIZ_DIAS:
             v = np.array(dentro[a][h])
             f10 = float((v < .10).mean())
-            out[a][h] = {"k": float(np.clip(f10 / .10, 1.0, K_MAX)), "f10_dentro": f10, "n_dentro": len(v),
+            n_eff = max(1, int(len(v) * PASSO_DENTRO / HORIZ_PASSOS[h]))
+            lo, hi = wilson(f10, n_eff)
+            out[a][h] = {"k": float(np.clip(f10 / .10, 1.0, K_MAX)), "f10_dentro": f10, "n_dentro": len(v), "n_eff_dentro": n_eff,
+                         "k_ic95": [float(lo / .10), float(hi / .10)],
                          "f5_dentro": float((v < .05).mean()), "f90_dentro": float((v > .90).mean())}
     return out
 
@@ -198,7 +219,7 @@ def main():
         s2f_s = pd.Series(s2f, index=xfx.index)
         s2b_s = pd.Series(s2b, index=r.index)
         cache = RAIZ / "data" / "processed" / f"recal_{CONFIG_BACKTEST}.json"
-        chave = {"data_base": str(data_base.date()), "variante": CONFIG_BACKTEST, "n": N_DENTRO, "passo": PASSO_DENTRO}
+        chave = {"data_base": str(data_base.date()), "variante": CONFIG_BACKTEST, "n": N_DENTRO, "passo": PASSO_DENTRO, "v": 2}
         c_ok = cache.exists() and json.loads(cache.read_text()).get("chave") == chave
         if c_ok:
             recal = {a: {int(h): v for h, v in d.items()} for a, d in json.loads(cache.read_text())["recal"].items()}
@@ -209,8 +230,13 @@ def main():
     KH = {a: ({h: recal[a][h]["k"] for h in HORIZ_DIAS} if recal else None) for a in ATIVOS}
     base = {a: {"horizontes": resumo_dist(a, lv[a], spot[a], KH[a]), "leque": leque(a, lv[a], spot[a], kh=KH[a]),
                 "drawdown": drawdowns(a, lv[a], spot[a], KH[a])} for a in ATIVOS}
-    # probabilidade conjunta de risk-off: real perde >10% e BTC cai >30% em 365 dias
-    conj = float(((lv["usdbrl"][:, -1] / s0f > 1 / 0.9) & (lv["btcusd"][:, -1] / s0b < 0.7)).mean())
+    # probabilidade conjunta de risk-off na simulação (sem recalibração):
+    # USD/BRL sobe mais de 10% e BTC/USD cai mais de 30% em 365 dias
+    conj = float(((lv["usdbrl"][:, -1] / s0f > 1.10) & (lv["btcusd"][:, -1] / s0b < 0.70)).mean())
+    # probabilidade de os dois P1 de 365 dias acontecerem juntos, nas mesmas trajetórias
+    p1f, p1b = base["usdbrl"]["horizontes"]["365"]["P1"]["nivel"], base["btcusd"]["horizontes"]["365"]["P1"]["nivel"]
+    conj_p1 = float(((lv["usdbrl"][:, -1] >= p1f) & (lv["btcusd"][:, -1] <= p1b)).mean())
+    marg_p1 = {"usdbrl": float((lv["usdbrl"][:, -1] >= p1f).mean()), "btcusd": float((lv["btcusd"][:, -1] <= p1b).mean())}
 
     # ---------- cenários de estresse ----------
     idx = df.index
@@ -256,13 +282,18 @@ def main():
         mf, kf, fundo_f, fim_f = ate_o_fundo(seg_f)
         if c["tipo"] == "reconstruído":
             mb, kb, fundo_b, fim_b = ate_o_fundo(seg_b)
-            vol_f = float(np.std(xf_h))  # volatilidade realizada nos 252 dias do episódio
-            vol_b = float(np.std(xb_h))
+            # A mediana já replica o episódio; a dispersão em volta dela é uma
+            # premissa: FRAC_DISP da volatilidade realizada nos 252 dias do episódio.
+            vol_f = FRAC_DISP * float(np.std(xf_h))
+            vol_b = FRAC_DISP * float(np.std(xb_h))
+            fim_dados = str(idx[min(len(idx) - 1, idx.get_indexer([pd.Timestamp(c["inicio"])], method="bfill")[0] + H_MAX)].date())
             rho_ep = float(np.corrcoef(xf_h[:max(kf, kb, 63)], xb_h[:max(kf, kb, 63)])[0, 1])
         else:
             mb, kb, fundo_b, fim_b = np.zeros(H_MAX), 0, 0.0, 0.0
-            vol_f = float(np.mean([np.std(p) for p in paths]))
-            vol_b = float(np.sqrt(gb.var_alvo))
+            vol_f = FRAC_DISP * float(np.mean([np.std(p) for p in paths]))
+            vol_b = float(np.sqrt(gb.var_alvo))  # BTC não replica episódio: volatilidade de longo prazo inteira
+            fim_dados = max(str(xfx_todo.index[min(len(xfx_todo) - 1, xfx_todo.index.get_indexer([pd.Timestamp(a)], method="bfill")[0] + H_MAX)].date())
+                            for a in c["analogos"])
             rho_ep = rho_250
         rho_c = max(rho_ep, rho_stress)
         a1, a2 = inovacoes(N, H_MAX, rho_c, NU_C_STRESS, gf.nu, gb.nu, rng)
@@ -282,7 +313,8 @@ def main():
             "premissas": {
                 "deriva": "trajetória histórica dia a dia até o pior ponto em 365 dias; depois, deriva zero (a recuperação não é assumida)",
                 "vol_anual_fx": vol_f * np.sqrt(252), "vol_anual_btc": vol_b * np.sqrt(252),
-                "rho_episodio": rho_ep, "rho_usado": rho_c, "nu_copula": NU_C_STRESS,
+                "rho_episodio": rho_ep, "rho_usado": rho_c, "rho_limiar_p95": rho_stress, "nu_copula": NU_C_STRESS,
+                "frac_dispersao": FRAC_DISP, "fim_dos_dados": fim_dados, "recalibrado": False,
                 "dias_ate_pior_fx": kf + 1, "dias_ate_pior_btc": kb + 1,
                 "choque_fx_pct": float(np.exp(-fundo_f) - 1), "choque_btc_pct": float(np.exp(fundo_b) - 1),
             },
@@ -302,7 +334,8 @@ def main():
     # ---------- contenção dos choques reais pelos estresses (validação cruzada) ----------
     # Para cada choque real, o realizado em cada horizonte cabe no P5 de algum
     # cenário que NÃO foi construído com aquele episódio?
-    PROPRIO = {"2020-02-14": {"covid2020"}, "2021-11-10": {"cripto2022"}, "2024-09-30": {"fiscal2627"}}
+    # Só contam estresses construídos com dados que terminam antes da véspera
+    # do choque (nada do futuro), e nunca o do próprio episódio.
     contencao = []
     for o, nm in [("2020-02-14", "Covid"), ("2021-11-10", "Inverno cripto"), ("2024-09-30", "Pacote fiscal de 2024")]:
         i0 = idx.get_indexer([pd.Timestamp(o)], method="ffill")[0]
@@ -317,7 +350,7 @@ def main():
                 real = {"usdbrl": f1 / f0 - 1, "btcusd": b1 / b0 - 1, "btcbrl": f1 * b1 / (f0 * b0) - 1}[a]
                 cobre = []
                 for c in cenarios:
-                    if c["id"] in PROPRIO[o]:
+                    if c["premissas"]["fim_dos_dados"] >= o:
                         continue
                     p5 = c["ativos"][a]["horizontes"][str(hd)]["P5"]["var_pct"]
                     if (a == "usdbrl" and p5 >= real) or (a != "usdbrl" and p5 <= real):
@@ -361,7 +394,8 @@ def main():
             "nu_copula_estresse": NU_C_STRESS, "n_trajetorias": N, "semente": SEED,
             "amostra_fx": [str(xfx.index[0].date()), str(xfx.index[-1].date())],
             "amostra_btc": [str(r.index[0].date()), str(r.index[-1].date())],
-            "prob_riskoff_conjunto_365d": conj,
+            "prob_riskoff_conjunto_365d": conj, "riskoff_def": "USD/BRL +10% e BTC/USD −30% em 365 dias, na simulação sem recalibração",
+            "prob_p1_conjunto_365d": conj_p1, "prob_p1_marginal_simulada_365d": marg_p1,
             "variante": CONFIG_BACKTEST, "variante_nome": CFG["nome"],
             "recal": {a: {str(h): v for h, v in recal[a].items()} for a in recal} if recal else None,
         },
@@ -373,7 +407,7 @@ def main():
         "historico": historico,
         "backtest": bt_out,
         "fontes": [meta_serie(n) for n in ["usdbrl_ptax", "btc_binance", "btc_coinbase_fred", "btc_coingecko_spot",
-                                           "selic_meta", "ipca_12m", "focus_anuais", "focus_ipca12m",
+                                           "selic_meta", "focus_anuais", "focus_ipca12m",
                                            "tesouro_direto", "dbgg_pib", "primario_12m_pib", "fluxo_cambial",
                                            "dolar_amplo", "fed_funds", "vix"]],
     }
