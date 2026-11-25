@@ -25,7 +25,7 @@ def wilson(p, n, z=1.96):
 
 
 def f(v, d=1):
-    return f"{100 * v:.{d}f}%".replace(".", ",")
+    return f"{100 * v:.{d}f}%".replace(".", ",").replace("-", "−")
 
 
 def celulas(reg, corte=None):

@@ -99,12 +99,12 @@ Percentil do valor realizado na distribuição-base projetada na véspera do cho
 | Choque | Ativo | 30 dias | 90 dias | 180 dias | 365 dias |
 |---|---|---|---|---|---|
 | Covid | USD/BRL | 18% <br><sub>Crise fiscal</sub> | 32% <br><sub>Crise fiscal, Fiscal e eleitoral</sub> | 27% <br><sub>Crise fiscal, Fiscal e eleitoral</sub> | 25% <br><sub>base</sub> |
-| Covid | BTC/USD | -48% <br><sub>**nenhum**</sub> | -8% <br><sub>base</sub> | 15% <br><sub>base</sub> | 440% <br><sub>base</sub> |
-| Covid | BTC/BRL | -38% <br><sub>Inverno cripto</sub> | 21% <br><sub>base</sub> | 46% <br><sub>base</sub> | 575% <br><sub>base</sub> |
-| Inverno cripto | USD/BRL | 2% <br><sub>base</sub> | -3% <br><sub>base</sub> | -6% <br><sub>base</sub> | -3% <br><sub>base</sub> |
-| Inverno cripto | BTC/USD | -27% <br><sub>base</sub> | -32% <br><sub>base</sub> | -55% <br><sub>base</sub> | -73% <br><sub>Covid</sub> |
-| Inverno cripto | BTC/BRL | -26% <br><sub>base</sub> | -34% <br><sub>base</sub> | -58% <br><sub>base</sub> | -74% <br><sub>Covid</sub> |
-| Pacote fiscal de 2024 | USD/BRL | 5% <br><sub>base</sub> | 14% <br><sub>base</sub> | 4% <br><sub>base</sub> | -2% <br><sub>base</sub> |
+| Covid | BTC/USD | −48% <br><sub>**nenhum**</sub> | −8% <br><sub>base</sub> | 15% <br><sub>base</sub> | 440% <br><sub>base</sub> |
+| Covid | BTC/BRL | −38% <br><sub>Inverno cripto</sub> | 21% <br><sub>base</sub> | 46% <br><sub>base</sub> | 575% <br><sub>base</sub> |
+| Inverno cripto | USD/BRL | 2% <br><sub>base</sub> | −3% <br><sub>base</sub> | −6% <br><sub>base</sub> | −3% <br><sub>base</sub> |
+| Inverno cripto | BTC/USD | −27% <br><sub>base</sub> | −32% <br><sub>base</sub> | −55% <br><sub>base</sub> | −73% <br><sub>Covid</sub> |
+| Inverno cripto | BTC/BRL | −26% <br><sub>base</sub> | −34% <br><sub>base</sub> | −58% <br><sub>base</sub> | −74% <br><sub>Covid</sub> |
+| Pacote fiscal de 2024 | USD/BRL | 5% <br><sub>base</sub> | 14% <br><sub>base</sub> | 4% <br><sub>base</sub> | −2% <br><sub>base</sub> |
 | Pacote fiscal de 2024 | BTC/USD | 15% <br><sub>base</sub> | 48% <br><sub>base</sub> | 30% <br><sub>base</sub> | 87% <br><sub>base</sub> |
 | Pacote fiscal de 2024 | BTC/BRL | 20% <br><sub>base</sub> | 68% <br><sub>base</sub> | 36% <br><sub>base</sub> | 83% <br><sub>base</sub> |
 

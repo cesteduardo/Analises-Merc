@@ -19,16 +19,23 @@ Monte Carlo com volatilidade GARCH e caudas gordas (t de Student). A correlaçã
 
 Somente públicas e citadas: BCB/PTAX, Boletim Focus, Tesouro Nacional (DI e NTN-B), FRED (DXY, Fed Funds), CoinGecko ou Binance.
 
-## Estrutura prevista
+## Estrutura
 
 ```
 .
-├── index.html        # painel
-├── style.css         # estilos do painel
-├── charts.js         # fan charts, mapa de calor e tabelas
-├── projections.json  # saída do modelo: quantis por ativo e horizonte
-├── METODOLOGIA.md    # premissas, fontes, modelo e calibração
-└── README.md
+├── index.html            # painel
+├── style.css             # estilos do painel
+├── charts.js             # leques, mapa de calor, cenários, gatilhos e backtest
+├── projections.json      # saída do modelo: quantis por ativo, horizonte e cenário
+├── METODOLOGIA.md        # premissas, fontes, modelo, critérios de calibração e limitações
+├── relatorios/
+│   ├── CALIBRACAO.md     # backtest de todas as variantes e veredito por critério
+│   └── CRITICO.md        # revisões do crítico cego
+├── pipeline/             # coleta, modelo, backtest, projeção e relatórios (Python)
+└── data/                 # séries brutas com fonte e data de coleta; resultados do backtest
 ```
 
-O relatório de calibração do backtest e a revisão final do crítico serão adicionados conforme o projeto avançar.
+## Estado atual
+
+- **Calibração parcial**: 7 de 12 células agregadas na meta de 8% a 12%; nenhuma falha estatisticamente significativa por corte; um choque real (BTC em 30 dias na Covid) fora do P5 da base e dos estresses independentes. Detalhes em `relatorios/CALIBRACAO.md`.
+- O painel abre direto no navegador a partir de um servidor estático qualquer (ele lê `projections.json` via `fetch`).

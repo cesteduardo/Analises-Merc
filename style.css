@@ -277,10 +277,13 @@ td small, th small { display: block; font-size: 11.5px; color: var(--tertiary); 
 .quantis thead th { font-size: 10.5px; letter-spacing: .08em; }
 
 /* Mapa de calor */
-.heat { min-width: 480px; table-layout: fixed; }
-.heat th:first-child { width: 38%; }
-.heat td { text-align: center; padding: 10px 6px; border: 2px solid transparent; border-radius: 10px; background-clip: padding-box; }
-.heat td b { display: block; font-size: 15px; font-weight: 500; color: var(--primary); }
+.heat { table-layout: fixed; }
+.heat th:first-child { width: 31%; }
+.heat thead th { font-size: 10px; letter-spacing: .06em; padding: 8px 2px; text-align: center; }
+.heat thead th:first-child { text-align: left; }
+.heat tbody th { font-size: 12.5px; padding-left: 0; }
+.heat td { text-align: center; padding: 9px 2px; border: 2px solid transparent; border-radius: 10px; background-clip: padding-box; }
+.heat td b { display: block; font-size: 13.5px; font-weight: 500; color: var(--primary); }
 .heat td small { color: var(--secondary); }
 .heat td.quente b, .heat td.quente small { color: #fff; }
 .heat tbody th { white-space: normal; padding-right: 12px; }
@@ -353,6 +356,14 @@ td small, th small { display: block; font-size: 11.5px; color: var(--tertiary); 
 .footbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 14px 20px; color: var(--secondary); border-radius: var(--radius-card); line-height: 1.4; }
 
 /* ---------- Telas maiores ---------- */
+/* tabela "o que precisaria acontecer" em pilha no celular */
+@media (max-width: 559px) {
+  .precisaria thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .precisaria tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 12px; padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+  .precisaria th, .precisaria td { border: 0; padding: 0; text-align: left; }
+  .precisaria tbody th { grid-column: 1 / -1; color: var(--primary); font-weight: 500; }
+  .precisaria td::before { content: attr(data-rot); display: block; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--tertiary); margin-bottom: 2px; }
+}
 @media (min-width: 560px) {
   .ctrl span:last-child { display: inline; }
   .controles { flex-direction: row; flex-wrap: wrap; align-items: center; }
@@ -362,6 +373,11 @@ td small, th small { display: block; font-size: 11.5px; color: var(--tertiary); 
   .leitura { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (min-width: 720px) {
+  .heat td b { font-size: 15px; }
+  .heat td { padding: 10px 6px; }
+  .heat thead th { font-size: 11px; letter-spacing: .13em; }
+  .heat tbody th { font-size: 14px; }
+  .heat th:first-child { width: 34%; }
   .veredito { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .quantis th, .quantis td { padding: 8px 10px; font-size: 14px; }
   .quantis thead th { font-size: 11px; letter-spacing: .13em; }

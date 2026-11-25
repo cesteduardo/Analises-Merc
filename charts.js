@@ -314,7 +314,7 @@
       linhas.push(["Correlação diária real × BTC", F2.format(pr.rho_episodio) + " no episódio", "usada " + F2.format(pr.rho_usado) + " (hoje " + F2.format(P.modelo.rho_250d) + ")"]);
       var tab = '<div class="table-wrap"><table class="precisaria"><caption>O que precisaria acontecer</caption><thead><tr><th scope="col">Condição</th><th scope="col">' +
         (c.tipo === "reconstruído" ? "No episódio" : "Premissa") + '</th><th scope="col">Hoje</th></tr></thead><tbody>' +
-        linhas.map(function (l) { return '<tr><th scope="row">' + esc(l[0]) + '</th><td>' + esc(l[1]) + '</td><td>' + esc(l[2]) + '</td></tr>'; }).join("") + "</tbody></table></div>";
+        linhas.map(function (l) { return '<tr><th scope="row">' + esc(l[0]) + '</th><td data-rot="' + (c.tipo === "reconstruído" ? "No episódio" : "Premissa") + '">' + esc(l[1]) + '</td><td data-rot="Hoje">' + esc(l[2]) + '</td></tr>'; }).join("") + "</tbody></table></div>";
       var real = c.historico_real_pct && c.historico_real_pct["365"];
       var prem = '<li>Início: ' + (c.data_inicio_real ? data(c.data_inicio_real) : "análogos de " + c.analogos.map(data).join(", ")) + '.</li>' +
         '<li>Mediana: ' + esc(pr.deriva) + '.</li>' +
