@@ -159,7 +159,8 @@
       if (mais_brando) av.push("Neste ativo, o estresse é mais brando que a distribuição-base em 365 dias (P1 de " + pct(pe, 0) + " contra " + pct(pb, 0) + "): o episódio " + esc(D.c.nome) + " pesou menos aqui do que a cauda geral do modelo.");
       var an = P.ancoras_historicas[a]["365"];
       var alem = a === "usdbrl" ? pe > an.var_pct : pe < an.var_pct;
-      if (alem) av.push("O P1 deste estresse (" + pct(pe, 0) + ") vai além do pior ano observado (" + pct(an.var_pct, 0) + "): a mediana já repete o episódio, e P10 a P1 descrevem uma repetição pior que a original.");
+      if (alem) av.push("O P1 deste estresse (" + pct(pe, 0) + ") vai além do pior ano observado nas fontes do painel (" + pct(an.var_pct, 0) + "). É a probabilidade de 1% dentro de um cenário que já supõe a repetição do episódio: a mediana repete o choque, e P10 a P1 somam a ele a incerteza de um ano normal." +
+        (a !== "usdbrl" ? " Referência fora das fontes (inferência): em 2011 o BTC caiu cerca de 93% do pico ao fundo." : ""));
     } else {
       var bt30 = P.backtest.agregado.filter(function (x) { return x.ativo === a && x.h === 30; })[0];
       if (bt30 && bt30.p10 > .12) av.push("Cauda de 30 dias provavelmente fina: no backtest, o realizado passou do P10 em " + F1.format(bt30.p10 * 100) + "% das vezes, acima da meta de 12%.");
@@ -202,7 +203,7 @@
       var x = X(g[1]);
       s += '<line x1="' + x + '" x2="' + x + '" y1="' + m.t + '" y2="' + (H - m.b) + '" style="stroke:var(--hairline)" stroke-dasharray="' + (g[1] ? "3 4" : "0") + '"/>';
       var rot = g[0];
-      s += '<text x="' + x + '" y="' + (H - 9) + '" text-anchor="' + (g[1] === 0 ? "end" : "middle") + '">' + rot + '</text>';
+      s += '<text x="' + x + '" y="' + (H - 9) + '" text-anchor="' + (g[1] === 0 ? "end" : "middle") + '"' + (estreito ? ' style="font-size:9.5px"' : '') + '>' + rot + '</text>';
     });
     if (X(0) - m.l > 80) s += '<text x="' + m.l + '" y="' + (H - 9) + '" text-anchor="start">' + data(hist[0].t).slice(3) + '</text>';
     s += '<path d="' + faixa("P50", "P10") + '" style="fill:var(--band-1)"/>';
@@ -361,7 +362,7 @@
       var real = c.historico_real_pct && c.historico_real_pct["365"];
       var prem = '<li>Início: ' + (c.data_inicio_real ? data(c.data_inicio_real) : "análogos de " + c.analogos.map(data).join(", ")) + '.</li>' +
         '<li>Mediana: ' + esc(pr.deriva) + '.</li>' +
-        '<li>Dispersão em volta da réplica (premissa): metade da volatilidade realizada no ' + (c.tipo === "reconstruído" ? 'episódio' : 'conjunto de análogos, no câmbio') + ' (' + F0.format(pr.vol_anual_fx_episodio * 100) + '% a.a. no câmbio' + (pr.vol_anual_btc_episodio ? ', ' + F0.format(pr.vol_anual_btc_episodio * 100) + '% no BTC' : '') + '), porque a mediana já carrega o choque, com piso na volatilidade de longo prazo do modelo (' + F0.format(pr.vol_anual_fx_base * 100) + '% e ' + F0.format(pr.vol_anual_btc_base * 100) + '%), porque um estresse não fica mais calmo que um ano comum. Resultado: ' + F0.format(pr.vol_anual_fx * 100) + '% a.a. no câmbio e ' + F0.format(pr.vol_anual_btc * 100) + '% a.a. no BTC' + (pr.piso_ativo_fx || pr.piso_ativo_btc ? ' (o piso está ativo)' : '') + '. Inovações t com cópula t de ' + F0.format(pr.nu_copula) + ' graus de liberdade. Sem recalibração da cauda.</li>' +
+        '<li>Dispersão em volta da réplica (premissa). Volatilidade do ' + (c.tipo === "reconstruído" ? 'episódio' : 'conjunto de análogos') + ': ' + F0.format(pr.vol_anual_fx_episodio * 100) + '% a.a. no câmbio' + (pr.vol_anual_btc_episodio ? ' e ' + F0.format(pr.vol_anual_btc_episodio * 100) + '% no BTC' : '') + '; metade: ' + F1.format(pr.vol_anual_fx_episodio * 50) + '%' + (pr.vol_anual_btc_episodio ? ' e ' + F0.format(pr.vol_anual_btc_episodio * 50) + '%' : '') + '; piso (volatilidade de longo prazo do modelo): ' + F0.format(pr.vol_anual_fx_base * 100) + '% e ' + F0.format(pr.vol_anual_btc_base * 100) + '%; usada: ' + F0.format(pr.vol_anual_fx * 100) + '% e ' + F0.format(pr.vol_anual_btc * 100) + '%' + (pr.vol_anual_btc_episodio ? '' : ' (o BTC não replica episódio e usa a de longo prazo)') + '. A metade evita contar duas vezes o choque que a mediana já carrega; o piso impede que um estresse fique mais calmo que um ano comum. Inovações t com cópula t de ' + F0.format(pr.nu_copula) + ' graus de liberdade. Sem recalibração da cauda.</li>' +
         '<li>Correlação usada: ' + F2.format(pr.rho_usado) + ', a maior entre ' + (c.tipo === "reconstruído" ? 'a do episódio (' + F2.format(pr.rho_episodio) + ')' : 'a atual (' + F2.format(pr.rho_episodio) + ')') + ' e o percentil 95 histórico da janela de 63 dias (' + F2.format(pr.rho_limiar_p95) + ').</li>' +
         '<li>Dados usados até ' + data(pr.fim_dos_dados) + '. Na validação do backtest, este cenário só cobre choques posteriores a essa data.</li>' +
         (real ? '<li>O que aconteceu de fato em 365 dias: USD/BRL ' + pct(real.usdbrl) + ', BTC/USD ' + pct(real.btcusd) + '. A recuperação, quando houve, não entra no cenário.</li>' : "");

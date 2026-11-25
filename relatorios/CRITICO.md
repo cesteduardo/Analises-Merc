@@ -56,3 +56,20 @@ O que o crítico considerou bem resolvido: direção do "ruim" fixa e explicada;
 | N7 | Cosmético | Concordância ("o estresse X e Y"). | Plural. |
 | N8 | Cosmético | "O P1 vai além" quando o P1 do BTC estava no nível do pior ano. | "no nível do pior ano observado" quando a diferença é de até 3 p.p. |
 | N9 | Cosmético | Backtest apertado no celular. | IC sem o rótulo "IC95" no celular. |
+
+## Rodada 3 — 25/11/2026 (commit f539d52)
+
+**Veredito: APROVADO** — 0 críticos, 0 maiores, 4 menores, 2 cosméticos. Todos os defeitos da rodada 2 resolvidos, exceto N3 (parcial).
+
+Sobre a mudança de modelo (piso na dispersão dos estresses), o crítico julgou a declaração suficiente: aviso no leque, premissas com volatilidade do episódio, piso e valor usado, explicação na metodologia e sensibilidade do critério 3 publicada. A ancoragem do P1 de −95% do BTC no inverno cripto foi considerada parcial, por depender de uma referência fora das fontes (2011).
+
+Defeitos restantes, todos corrigidos depois do veredito (commit seguinte):
+
+| # | Severidade | Defeito | Tratamento |
+|---|---|---|---|
+| N3 | Menor | A 7.3 ainda atribuía à anterioridade a perda de cobertura do câmbio da Covid. | Corrigido: a anterioridade só tirou a cobertura falsa do BTC/BRL em 30 dias; o câmbio em 90 dias fica descoberto por causa da dispersão. |
+| A | Menor | Âncora do P1 de −95% do BTC só no rodapé. | O aviso do leque cita a queda de cerca de 93% em 2011 (inferência, fora das fontes) e lembra que é 1% dentro de um cenário que já supõe a repetição. |
+| B | Menor | Redação ambígua: "metade da volatilidade (15%, 68%)". | Volatilidade do episódio, metade, piso e valor usado, cada um com seu número. |
+| C | Menor | A seção 8 não registrava que a regra de dispersão foi decidida depois de ver o critério 3. | Registrado entre as escolhas guiadas pelo backtest. |
+| D | Cosmético | Mapa de calor esticado até a altura dos gatilhos, com espaço vazio. | Cartões alinhados ao topo, sem esticar. |
+| E | Cosmético | Eixo apertado no celular. | Rótulos do eixo menores em telas estreitas. |

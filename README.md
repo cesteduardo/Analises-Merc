@@ -37,5 +37,6 @@ Somente públicas e citadas: BCB/PTAX, Boletim Focus, Tesouro Nacional (DI e NTN
 
 ## Estado atual
 
-- **Calibração parcial**: 7 de 12 células agregadas na meta de 8% a 12%; nenhuma falha estatisticamente significativa por corte; um choque real (BTC em 30 dias na Covid) fora do P5 da base e dos estresses independentes. Detalhes em `relatorios/CALIBRACAO.md`.
+- **Calibração parcial**: 7 de 12 células agregadas na meta de 8% a 12%, nenhuma falha estatisticamente significativa por corte e 3 casos de choque real (todos na Covid) fora do P5 da base e dos estresses anteriores. Detalhes em `relatorios/CALIBRACAO.md`.
+- **Crítico cego: aprovado na rodada 3**, sem defeitos críticos ou maiores; os menores restantes foram corrigidos. Histórico em `relatorios/CRITICO.md`.
 - O painel abre direto no navegador a partir de um servidor estático qualquer (ele lê `projections.json` via `fetch`).
