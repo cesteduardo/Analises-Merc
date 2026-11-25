@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Painel Merc — estilos
+   Cauda Gorda — estilos
    Linguagem visual de grbrands.com.br: fundo papel #EEEEE7 (preto no escuro),
    Inter em caixa alta espaçada nos rótulos, a frase de abertura em Times
    itálico, painéis de Liquid Glass separados por 12px de fundo e nenhum efeito
@@ -189,7 +189,13 @@ h3 { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.3; }
 .panel { border-radius: var(--radius-card); padding: 22px 18px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .head { display: flex; flex-direction: column; gap: 8px; }
 
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.marca { margin: 0; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; order: -1; flex: 1 1 100%; padding: 6px 4px 2px; }
+.marca__nome { font-family: var(--times); font-style: italic; font-size: 26px; line-height: 1; letter-spacing: -.01em; color: var(--primary); }
+.marca__nome::after { content: "."; color: var(--red); }
+.marca__sub { color: var(--tertiary); font-size: 11px; }
+.topbar .aviso { flex: 1 1 0; }
+@media (min-width: 900px) { .marca { flex: 0 1 auto; order: 0; padding: 0 4px; } .topbar .aviso { flex: 0 1 auto; margin-left: auto; } }
 .aviso { display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 12px 16px; color: var(--secondary); line-height: 1.3; min-width: 0; }
 .aviso__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex: none; }
 .ctrl { display: inline-flex; align-items: center; gap: 10px; height: 38px; padding: 0 14px 0 12px; flex: none; }

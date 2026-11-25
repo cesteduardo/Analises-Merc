@@ -1,4 +1,4 @@
-# Análises - Merc
+# Cauda Gorda
 
 Projeções deliberadamente pessimistas de **USD/BRL**, **BTC/USD** e **BTC/BRL** para 30, 90, 180 e 365 dias, entregues num painel visual.
 

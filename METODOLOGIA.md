@@ -1,4 +1,4 @@
-# Metodologia do Painel Merc
+# Metodologia do Cauda Gorda
 
 > **Aviso.** Este painel é um estudo de risco. Não é recomendação de investimento, não diz o que vai acontecer e não sugere compra nem venda de nenhum ativo.
 

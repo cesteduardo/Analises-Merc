@@ -6,7 +6,7 @@ import re, shutil
 R = Path(__file__).resolve().parent.parent
 src = (R / "index.html").read_text()
 corpo = src.split("<!--CONTEUDO-->")[1].split("<!--/CONTEUDO-->")[0]
-cab = """<title>Painel Merc</title>
+cab = """<title>Cauda Gorda</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

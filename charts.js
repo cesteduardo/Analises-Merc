@@ -1,4 +1,4 @@
-/* Painel Merc — gráficos e tabelas.
+/* Cauda Gorda — gráficos e tabelas.
    Lê projections.json (gerado por pipeline/projetar.py) e desenha tudo em SVG e
    HTML, sem bibliotecas. Convenção: P10, P5 e P1 estão sempre na direção ruim
    (USD/BRL mais alto; BTC mais baixo). P90f é o lado favorável, só referência. */
