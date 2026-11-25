@@ -20,7 +20,13 @@ QB = {"P50": .50, "P10": .10, "P5": .05, "P1": .01, "P90f": .90}  # na direção
 CONFIG_BACKTEST = "v3_1999_crise_recal"
 from variantes import VARIANTES
 CFG = VARIANTES[CONFIG_BACKTEST]
-FRAC_DISP = 0.5  # fração da volatilidade do episódio usada como dispersão em volta da réplica
+# Dispersão em volta da réplica de um estresse (premissa): metade da volatilidade
+# realizada no episódio, com piso na volatilidade de longo prazo do próprio
+# modelo. Metade, porque a mediana já carrega o choque dia a dia; o piso, porque
+# um estresse não pode ser mais calmo que um ano comum.
+FRAC_DISP = 0.5
+REGRAS_DISP = {"em_uso": (FRAC_DISP, True), "metade_sem_piso": (0.5, False), "inteira": (1.0, False)}
+N_SENS = 6000
 N_DENTRO, PASSO_DENTRO, K_MAX = 2000, 10, 2.0
 
 
@@ -284,18 +290,32 @@ def main():
             mb, kb, fundo_b, fim_b = ate_o_fundo(seg_b)
             # A mediana já replica o episódio; a dispersão em volta dela é uma
             # premissa: FRAC_DISP da volatilidade realizada nos 252 dias do episódio.
-            vol_f = FRAC_DISP * float(np.std(xf_h))
-            vol_b = FRAC_DISP * float(np.std(xb_h))
+            ep_f, ep_b = float(np.std(xf_h)), float(np.std(xb_h))
             fim_dados = str(idx[min(len(idx) - 1, idx.get_indexer([pd.Timestamp(c["inicio"])], method="bfill")[0] + H_MAX)].date())
             rho_ep = float(np.corrcoef(xf_h[:max(kf, kb, 63)], xb_h[:max(kf, kb, 63)])[0, 1])
         else:
             mb, kb, fundo_b, fim_b = np.zeros(H_MAX), 0, 0.0, 0.0
-            vol_f = FRAC_DISP * float(np.mean([np.std(p) for p in paths]))
-            vol_b = float(np.sqrt(gb.var_alvo))  # BTC não replica episódio: volatilidade de longo prazo inteira
+            ep_f, ep_b = float(np.mean([np.std(p) for p in paths])), None  # BTC não replica episódio
             fim_dados = max(str(xfx_todo.index[min(len(xfx_todo) - 1, xfx_todo.index.get_indexer([pd.Timestamp(a)], method="bfill")[0] + H_MAX)].date())
                             for a in c["analogos"])
             rho_ep = rho_250
+        base_f, base_b = float(np.sqrt(gf.var_alvo)), float(np.sqrt(gb.var_alvo))
+
+        def disp(ep, base, frac, piso):
+            if ep is None:
+                return base
+            return max(frac * ep, base) if piso else frac * ep
+
+        vol_f, vol_b = disp(ep_f, base_f, *REGRAS_DISP["em_uso"]), disp(ep_b, base_b, *REGRAS_DISP["em_uso"])
         rho_c = max(rho_ep, rho_stress)
+        # sensibilidade: P5 em cada horizonte com regras alternativas de dispersão
+        sens = {}
+        for nome_r, (fr, piso) in REGRAS_DISP.items():
+            if nome_r == "em_uso":
+                continue
+            s1, s2 = inovacoes(N_SENS, H_MAX, rho_c, NU_C_STRESS, gf.nu, gb.nu, rng)
+            lvs = niveis((mf + disp(ep_f, base_f, fr, piso) * s1).cumsum(axis=1), (mb + disp(ep_b, base_b, fr, piso) * s2).cumsum(axis=1), s0f, s0b)
+            sens[nome_r] = {a: {str(h): float(quantis_nivel(a, lvs[a][:, hp - 1])["P5"] / spot[a] - 1) for h, hp in HORIZ_PASSOS.items()} for a in ATIVOS}
         a1, a2 = inovacoes(N, H_MAX, rho_c, NU_C_STRESS, gf.nu, gb.nu, rng)
         cf_ = (mf + vol_f * a1).cumsum(axis=1)
         cb_ = (mb + vol_b * a2).cumsum(axis=1)
@@ -314,11 +334,15 @@ def main():
                 "deriva": "trajetória histórica dia a dia até o pior ponto em 365 dias; depois, deriva zero (a recuperação não é assumida)",
                 "vol_anual_fx": vol_f * np.sqrt(252), "vol_anual_btc": vol_b * np.sqrt(252),
                 "rho_episodio": rho_ep, "rho_usado": rho_c, "rho_limiar_p95": rho_stress, "nu_copula": NU_C_STRESS,
-                "frac_dispersao": FRAC_DISP, "fim_dos_dados": fim_dados, "recalibrado": False,
+                "frac_dispersao": FRAC_DISP, "piso_dispersao": True, "fim_dos_dados": fim_dados, "recalibrado": False,
+                "vol_anual_fx_episodio": ep_f * np.sqrt(252), "vol_anual_btc_episodio": (ep_b * np.sqrt(252)) if ep_b else None,
+                "vol_anual_fx_base": base_f * np.sqrt(252), "vol_anual_btc_base": base_b * np.sqrt(252),
+                "piso_ativo_fx": vol_f > FRAC_DISP * ep_f + 1e-12, "piso_ativo_btc": (vol_b > FRAC_DISP * ep_b + 1e-12) if ep_b else None,
                 "dias_ate_pior_fx": kf + 1, "dias_ate_pior_btc": kb + 1,
                 "choque_fx_pct": float(np.exp(-fundo_f) - 1), "choque_btc_pct": float(np.exp(fundo_b) - 1),
             },
             "historico_real_pct": reg,
+            "sens_p5": sens,
             "ativos": {a: {"horizontes": resumo_dist(a, lvc[a], spot[a]),
                            "leque": leque(a, lvc[a], spot[a], passo=6),
                            "drawdown": drawdowns(a, lvc[a], spot[a])} for a in ATIVOS},
@@ -348,14 +372,18 @@ def main():
                 f0, f1 = df["fx"].iloc[i0], df["fx"].iloc[i0 + hp]
                 b0, b1 = df["btc"].iloc[i0], df["btc"].iloc[i0 + hp]
                 real = {"usdbrl": f1 / f0 - 1, "btcusd": b1 / b0 - 1, "btcbrl": f1 * b1 / (f0 * b0) - 1}[a]
-                cobre = []
-                for c in cenarios:
-                    if c["premissas"]["fim_dos_dados"] >= o:
-                        continue
-                    p5 = c["ativos"][a]["horizontes"][str(hd)]["P5"]["var_pct"]
-                    if (a == "usdbrl" and p5 >= real) or (a != "usdbrl" and p5 <= real):
-                        cobre.append(c["id"])
-                linha["celulas"][a][str(hd)] = {"real_pct": float(real), "contido_por": cobre}
+                def cobre_com(p5de):
+                    out = []
+                    for c in cenarios:
+                        if c["premissas"]["fim_dos_dados"] >= o:
+                            continue
+                        p5 = p5de(c)
+                        if (a == "usdbrl" and p5 >= real) or (a != "usdbrl" and p5 <= real):
+                            out.append(c["id"])
+                    return out
+                cobre = cobre_com(lambda c: c["ativos"][a]["horizontes"][str(hd)]["P5"]["var_pct"])
+                sens_c = {r: cobre_com(lambda c, r=r: c["sens_p5"][r][a][str(hd)]) for r in REGRAS_DISP if r != "em_uso"}
+                linha["celulas"][a][str(hd)] = {"real_pct": float(real), "contido_por": cobre, "contido_por_sens": sens_c}
         contencao.append(linha)
 
     # ---------- gatilhos ----------

@@ -15,9 +15,9 @@ Toda saída é uma distribuição, nunca um valor único.
 | Rótulo | Significado | USD/BRL | BTC/USD e BTC/BRL |
 |---|---|---|---|
 | P50 | mediana | percentil 50 | percentil 50 |
-| P10 | 10% das trajetórias terminam pior | percentil 90 | percentil 10 |
-| P5 | 5% terminam pior | percentil 95 | percentil 5 |
-| P1 | 1% termina pior (cauda ruim) | percentil 99 | percentil 1 |
+| P10 | probabilidade estimada de 10% de terminar pior | percentil 90 | percentil 10 |
+| P5 | probabilidade estimada de 5% de terminar pior | percentil 95 | percentil 5 |
+| P1 | probabilidade estimada de 1% de terminar pior (cauda ruim) | percentil 99 | percentil 1 |
 | P90 | lado favorável, só como referência | percentil 10 | percentil 90 |
 
 O **pior caso plausível** do painel é o P1 da distribuição-base em 365 dias. Os P1 são de cada ativo isolado: o painel informa, ao lado, a probabilidade de os dois P1 de 365 dias acontecerem juntos nas mesmas trajetórias, que é muito menor que 1%.
@@ -130,7 +130,7 @@ Cada cenário é uma distribuição condicional: "se as condições do episódio
 **Regra comum (premissas):**
 
 - **Mediana**: segue, dia a dia, os retornos reais do episódio até o pior ponto dentro de 365 dias corridos, separadamente para câmbio e BTC. Depois do pior ponto, deriva zero. **A recuperação histórica não é assumida.** O painel mostra, ao lado, o que de fato aconteceu 365 dias depois.
-- **Dispersão** (premissa): inovações t de Student com **metade** da volatilidade realizada nos 252 dias úteis do episódio. A mediana já carrega o choque dia a dia; usar a volatilidade inteira por cima dela contaria a dispersão do episódio duas vezes (na v1, o P1 do BTC no inverno cripto chegava a −95%). Metade é uma escolha declarada, não uma estimativa. Mesmo assim, o P1 de um estresse pode passar do pior ano observado, porque descreve uma repetição pior que a original; o painel avisa quando isso acontece.
+- **Dispersão** (premissa): inovações t de Student com **metade** da volatilidade realizada nos 252 dias úteis do episódio, com **piso** na volatilidade de longo prazo do próprio modelo (15% a.a. no câmbio, 66% no BTC). A metade evita contar duas vezes a dispersão do episódio, que a mediana já carrega dia a dia (na v1, com a volatilidade inteira do episódio, o P1 do BTC no inverno cripto chegava a −95%; hoje, com o piso, fica em nível parecido, mas pela incerteza de um ano normal somada à réplica, não pela dispersão do episódio contada duas vezes). O piso impede que um estresse fique mais calmo que um ano comum: só com a metade, a dispersão do câmbio caía para 8% a 11% a.a., abaixo da do modelo-base, e alguns estresses ficavam mais brandos que a base no mapa de calor. Nos episódios atuais o piso está ativo nos dois ativos, de modo que a dispersão efetiva é a de longo prazo do modelo. As duas frações são escolhas declaradas, não estimativas; a sensibilidade do critério 3 a elas está em 7.3. Consequência visível: o P1 de um estresse passa do pior ano observado, porque descreve uma repetição pior que a original somada à incerteza de um ano normal; o painel avisa quando isso acontece.
 - **Sem recalibração**: o fator k (4.5) vale só para a distribuição-base. Um estresse pode, num ativo que o episódio não atingiu, ficar mais brando que a base; o painel avisa nesse caso.
 - **Correlação**: a maior entre a do episódio e o percentil 95 histórico (63 dias); cópula t com 4 graus de liberdade.
 - **Ordem**: do mais severo ao menos severo, pelo maior drawdown mediano em 365 dias entre os três ativos.
@@ -187,7 +187,10 @@ Por que não exigir que o P5 da base contenha todos os choques: os choques nomea
 
 - **Critério 1: 7 de 12** células agregadas na faixa (v1: 6 de 12). Fora da faixa: USD/BRL em 90 e 180 dias (7,6% e 7,3%, pessimista), BTC/USD em 30 dias (13,0%, otimista) e BTC/USD e BTC/BRL em 365 dias (7,8%, pessimista). Em todas, o IC95 contém 10%. Atenção: no câmbio, as células agregadas "na faixa" de 30 e 365 dias resultam de erros opostos que se compensam (corte 2018 otimista, corte 2021 pessimista); o painel as marca. A calibração do câmbio depende do regime.
 - **Critério 2: atendido**, mas com pouco poder. Nenhuma das 24 células por corte tem desvio estatisticamente significativo (v1: 1). Com 3 a 10 observações independentes nos horizontes longos, só desvios grandes seriam detectados; isso não é uma aprovação forte.
-- **Critério 3: não atendido.** Com a regra de só aceitar estresses anteriores ao choque, ficam sem cobertura a Covid em 30 dias nos três ativos e em 90 dias no câmbio, e o inverno cripto no BTC/BRL em 365 dias. A falha mais grave é a do BTC em 30 dias: a queda de 48% ficou além do P5 da base e de todo estresse disponível na época.
+- **Critério 3: não atendido.** Ficam 3 casos sem cobertura, todos na Covid: o câmbio em 90 dias (+32%) e o BTC/USD e o BTC/BRL em 30 dias (−48% e −38%). Só o estresse de 2015 é anterior à Covid, e nenhum dos três cabe no P5 dele nem no da base. Duas regras pesam nesse resultado, e o efeito de cada uma é separável:
+  - **anterioridade**: na rodada 1, sem ela, os mesmos choques da Covid eram "cobertos" por estresses de 2022 e 2026–27, construídos com dados posteriores. A regra de só aceitar estresses anteriores tirou essa cobertura falsa;
+  - **dispersão dos estresses**: com metade da volatilidade do episódio e sem piso, seriam 5 casos (o câmbio da Covid em 30 dias e o BTC/BRL do inverno cripto em 365 dias também ficariam de fora); com o piso em uso, 3; com a volatilidade inteira do episódio, 2.
+  A falha mais grave é a do BTC em 30 dias na Covid: a queda de 48% fica fora sob qualquer das três regras.
 
 O painel declara esse estado no topo e na seção de backtest. Forçar as cinco células restantes para dentro da faixa exigiria ajustar o modelo ao próprio período de teste.
 

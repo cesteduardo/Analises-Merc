@@ -168,7 +168,21 @@ def main():
                     txt = "**nenhum**"; falhas_ct.append(f"{c['choque']} · {NOMES[a]} · {h} dias")
                 cel.append(f"{f(x['real_pct'], 0)} <br><sub>{txt}</sub>")
             out.append(f"| {c['choque']} | {NOMES[a]} | " + " | ".join(cel) + " |")
-    out += ["", "Cada célula traz a variação realizada e quem a contém no P5: “base” quando a própria distribuição-base já a continha.", ""]
+    sens = {}
+    for r in ("metade_sem_piso", "inteira"):
+        n = 0
+        for c in proj["contencao_estresses"]:
+            for a in NOMES:
+                for h in HZ:
+                    x = c["celulas"][a].get(str(h))
+                    if not x:
+                        continue
+                    bp = reg[(reg.origem == c["origem"]) & (reg.ativo == a) & (reg.h == h)].pit
+                    if not (len(bp) and float(bp.iloc[0]) >= .05) and not x["contido_por_sens"][r]:
+                        n += 1
+        sens[r] = n
+    out += ["", "Cada célula traz a variação realizada e quem a contém no P5: “base” quando a própria distribuição-base já a continha.", "",
+            f"**Sensibilidade à dispersão dos estresses.** Casos sem cobertura com a regra em uso (metade da volatilidade do episódio, com piso na de longo prazo do modelo): {len(falhas_ct)}; com metade sem piso: {sens['metade_sem_piso']}; com a volatilidade inteira do episódio: {sens['inteira']}.", ""]
 
     # ---------- veredito ----------
     ok1 = dentro == 12

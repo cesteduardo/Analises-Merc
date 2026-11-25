@@ -36,6 +36,10 @@
     if (v >= 1e5) return F0.format(v / 1e3) + " mil";
     return F1.format(v / 1e3) + " mil";
   }
+  function semUnidade(a, v) {
+    if (a === "usdbrl") return F2.format(v);
+    return v >= 1e5 ? F0.format(v / 1e3) : F1.format(v / 1e3);
+  }
   function moeda(a, v) { return (a === "btcusd" ? "US$ " : "R$ ") + curto(a, v); }
   function dataHora(s) { return data(s) + " " + s.slice(11, 16) + " UTC"; }
   function pct(v, d) { var s = (v > 0 ? "+" : v < 0 ? "−" : "") + nf(d === undefined ? 1 : d).format(Math.abs(v * 100)) + "%"; return s; }
@@ -66,9 +70,10 @@
       })[0];
       var pv = pior.ativos[a].horizontes["365"].P50;
       var an = P.ancoras_historicas[a]["365"], k = P.modelo.recal ? P.modelo.recal[a]["365"].k : 1;
-      var alem = a === "usdbrl" ? h.P1.var_pct > an.var_pct : h.P1.var_pct < an.var_pct;
+      var dif = a === "usdbrl" ? h.P1.var_pct - an.var_pct : an.var_pct - h.P1.var_pct;
+      var alem = dif > .03, nivel = Math.abs(dif) <= .03;
       var aviso = '<p class="tile__ancora">Pior ano observado desde ' + data(an.desde).slice(6) + ': ' + pct(an.var_pct, 0) + ' (' + data(an.inicio).slice(3) + ' a ' + data(an.fim).slice(3) + ').' +
-        (alem ? ' <b>O P1 vai além: é extrapolação da cauda' + (k > 1 ? ' recalibrada (k = ' + F2.format(k) + '), não verificável no backtest' : '') + '.</b>' : '') + '</p>';
+        (alem ? ' <b>O P1 vai além: é extrapolação da cauda' + (k > 1 ? ' recalibrada (k = ' + F2.format(k) + '), não verificável no backtest' : '') + '.</b>' : nivel ? ' O P1 fica no nível do pior ano observado.' : '') + '</p>';
       var bt30 = P.backtest.agregado.filter(function (x) { return x.ativo === a && x.h === 30; })[0];
       if (bt30 && bt30.p10 > .12) aviso += '<p class="tile__ancora"><b>Cauda de 30 dias provavelmente fina:</b> no backtest, o realizado passou do P10 em ' + F1.format(bt30.p10 * 100) + '% das vezes, e a queda da Covid ficou fora do P5.</p>';
       html += '<article class="tile glass">' +
@@ -85,13 +90,13 @@
     el("tiles").innerHTML = html;
     var mo = P.modelo;
     el("hero-nota").textContent = "Pior, aqui, é o dólar mais caro e o bitcoin mais barato. P1, P5 e P10 são os níveis que têm 1%, 5% e 10% de probabilidade estimada de ser ultrapassados nessa direção; P50 é a mediana. Os dois P1 são de cada ativo isolado: acontecerem juntos tem probabilidade de " +
-      F2.format(mo.prob_p1_conjunto_365d * 100) + "%" + " nas mesmas trajetórias (" + F0.format(mo.prob_p1_conjunto_365d * mo.n_trajetorias) + " de " + F0.format(mo.n_trajetorias) + "). Para o câmbio, a probabilidade de 1% já inclui a recalibração da cauda: na simulação bruta, o P1 exibido corresponde a " + F2.format(mo.prob_p1_marginal_simulada_365d.usdbrl * 100) + "% das trajetórias. BTC/BRL é sempre BTC/USD × USD/BRL na mesma trajetória.";
+      F2.format(mo.prob_p1_conjunto_365d * 100) + "%" + " nas mesmas trajetórias (" + F0.format(mo.prob_p1_conjunto_365d * mo.n_trajetorias) + " de " + F0.format(mo.n_trajetorias) + "). Para o câmbio, a probabilidade de 1% já inclui a recalibração da cauda: na simulação bruta, o P1 exibido em 365 dias corresponde a " + F2.format(1 / mo.recal.usdbrl["365"].k) + "% das trajetórias. BTC/BRL é sempre BTC/USD × USD/BRL na mesma trajetória.";
     // selos de estado
     var v = veredito();
     var alertas = P.gatilhos.filter(function (g) { return g.status === "alerta"; }).map(function (g) { return g.nome; });
     el("selo").innerHTML =
       '<a class="chip glass" href="#h-bt" data-s="' + (v.dentro === v.total && !v.sig && !v.semCob.length ? "ok" : "fora") + '"><i aria-hidden="true"></i>Calibração parcial: ' + v.dentro + ' de ' + v.total + ' células do backtest na meta de 8% a 12% (teste com pouco poder nos horizontes longos); ' +
-        v.semCob.length + ' casos de choque real (ativo e horizonte) fora do P5 da base e de todos os estresses anteriores a eles.</a>' +
+        v.semCob.length + ' casos de choque real (ativo e horizonte) fora do P5 da base e de todos os estresses anteriores a eles. No câmbio, a calibração depende do regime: o corte 2018 erra para o lado otimista e o 2021 para o pessimista.</a>' +
       '<a class="chip glass" href="#h-gat" data-s="' + (alertas.length ? "alerta" : "normal") + '"><i aria-hidden="true"></i>' +
       (alertas.length ? "Gatilhos em alerta: " + esc(alertas.join(", ")) : "Nenhum gatilho em alerta") + '</a>';
   }
@@ -141,7 +146,7 @@
       '<span><i style="border-top:1.5px dashed var(--cold);height:0"></i>P90, lado favorável</span>' +
       '<span>Escala logarítmica · eixo em dias úteis · as três curvas usam as mesmas trajetórias</span>';
     var nota = "Para USD/BRL, P10, P5 e P1 são os percentis 90, 95 e 99 da cotação (dólar mais caro); para BTC/USD e BTC/BRL, os percentis 10, 5 e 1 (preço mais baixo). “Pior histórico” é a pior variação observada no mesmo horizonte, com o mês de início; no BTC, cobre só o período das fontes do painel (desde 2015). Antes disso, fora dessas fontes, o BTC teve quedas de cerca de 85% a 93% (2011 e 2013–15; inferência, não verificada nas fontes do painel).";
-    if (D.c) nota += " Cenário de estresse: " + D.c.premissas.deriva + "; dispersão em volta da réplica igual a " + F0.format(D.c.premissas.frac_dispersao * 100) + "% da volatilidade do episódio (premissa). A recalibração da cauda não se aplica aos estresses.";
+    if (D.c) nota += " Cenário de estresse: " + D.c.premissas.deriva + "; dispersão em volta da réplica de " + F0.format(D.c.premissas.vol_anual_fx * 100) + "% a.a. no câmbio e " + F0.format(D.c.premissas.vol_anual_btc * 100) + "% a.a. no BTC (metade da volatilidade do episódio, com piso na de longo prazo do modelo; premissa). A recalibração da cauda não se aplica aos estresses.";
     else if (P.modelo.recal) nota += " Na distribuição-base, os quantis da cauda do câmbio incluem a recalibração estimada no histórico (ver premissas). Linhas suavizadas em 7 dias úteis para tirar o ruído do Monte Carlo; nos horizontes, os valores são exatos.";
     el("nota-quantis").textContent = nota;
   }
@@ -170,7 +175,7 @@
     var estreito = W < 420;
     var H = estreito ? 250 : Math.round(Math.min(340, Math.max(280, W * .6)));
     var m = { l: estreito ? 46 : 58, r: estreito ? 64 : 88, t: 12, b: 28 };
-    var hist = P.historico.slice(-(estreito ? 90 : 130));
+    var hist = P.historico.slice(-(W < 560 && window.innerWidth < 560 ? 90 : 130));
     var nh = hist.length, x0 = -(nh - 1), x1 = 252;
     var vals = [];
     hist.forEach(function (h) { vals.push(h[a]); });
@@ -196,10 +201,10 @@
     [["hoje", 0]].concat(HZ.map(function (h) { return [h + "d", P.passos[h]]; })).forEach(function (g) {
       var x = X(g[1]);
       s += '<line x1="' + x + '" x2="' + x + '" y1="' + m.t + '" y2="' + (H - m.b) + '" style="stroke:var(--hairline)" stroke-dasharray="' + (g[1] ? "3 4" : "0") + '"/>';
-      var rot = estreito ? g[0].replace("d", "") : g[0];
+      var rot = g[0];
       s += '<text x="' + x + '" y="' + (H - 9) + '" text-anchor="' + (g[1] === 0 ? "end" : "middle") + '">' + rot + '</text>';
     });
-    s += '<text x="' + m.l + '" y="' + (H - 9) + '" text-anchor="start">' + data(hist[0].t).slice(3) + '</text>';
+    if (X(0) - m.l > 80) s += '<text x="' + m.l + '" y="' + (H - 9) + '" text-anchor="start">' + data(hist[0].t).slice(3) + '</text>';
     s += '<path d="' + faixa("P50", "P10") + '" style="fill:var(--band-1)"/>';
     s += '<path d="' + faixa("P10", "P5") + '" style="fill:var(--band-2)"/>';
     s += '<path d="' + faixa("P5", "P1") + '" style="fill:var(--band-3)"/>';
@@ -274,10 +279,10 @@
     var H = D.a[a].horizontes;
     var linhas = [["P1", "P1", "p1"], ["P5", "P5", ""], ["P10", "P10", ""], ["P50", "P50 <span class=\"long\">· mediana</span>", ""], ["P90f", "P90 <span class=\"long\">· favorável</span>", "fav"]];
     var h = '<caption class="sr-only">' + NOMES[a] + ', ' + esc(D.nome) + ': quantis por horizonte, em ' + (a === "btcusd" ? "dólares" : "reais") + '</caption>' +
-      '<thead><tr><th scope="col">Quantil <span class="unid">em ' + (a === "btcusd" ? "US$" : "R$") + '</span></th>' + HZ.map(function (z) { return '<th scope="col">' + z + ' dias</th>'; }).join("") + '</tr></thead><tbody>';
+      '<thead><tr><th scope="col">Quantil <span class="unid">em ' + (a === "btcusd" ? "US$ mil" : a === "btcbrl" ? "R$ mil" : "R$") + '</span></th>' + HZ.map(function (z) { return '<th scope="col">' + z + ' dias</th>'; }).join("") + '</tr></thead><tbody>';
     linhas.forEach(function (l) {
       h += '<tr class="' + l[2] + '"><th scope="row">' + l[1] + '</th>';
-      HZ.forEach(function (z) { var r = H[z][l[0]]; h += '<td>' + curto(a, r.nivel) + '<small>' + pct(r.var_pct) + '</small></td>'; });
+      HZ.forEach(function (z) { var r = H[z][l[0]]; h += '<td>' + semUnidade(a, r.nivel) + '<small>' + pct(r.var_pct) + '</small></td>'; });
       h += '</tr>';
     });
     var an = P.ancoras_historicas[a];
@@ -299,7 +304,8 @@
     var h = '<caption class="sr-only">' + lbl + ' desde o pico, até cada horizonte. Número grande: P5. Número pequeno: mediana.</caption>' +
       '<thead><tr><th scope="col">Distribuição</th>' + HZ.map(function (z) { return '<th scope="col">' + z + ' dias</th>'; }).join("") + '</tr></thead><tbody>';
     linhas.forEach(function (l) {
-      h += '<tr><th scope="row">' + esc(l.nome) + '<small>' + esc(l.sub) + '</small></th>';
+      var brando = l.nome !== "Distribuição-base" && l.d["365"].P5 < P.base[a].drawdown["365"].P5;
+      h += '<tr><th scope="row">' + esc(l.nome) + '<small>' + esc(l.sub) + (brando ? ' · <span class="brando">mais brando que a base neste ativo</span>' : '') + '</small></th>';
       HZ.forEach(function (z) {
         var v = l.d[z].P5, k = Math.round(8 + 64 * v / max);
         h += '<td style="background:color-mix(in srgb, var(--red) ' + k + '%, transparent)"><b>' + pct(-v, 0) + '</b><small>' + pct(-l.d[z].P50, 0) + '</small></td>';
@@ -340,7 +346,7 @@
         if (ge.selic_real !== null) linhas.push(["Selic real ex-ante", F1.format(ge.selic_real) + "% no início", "hoje " + F1.format(hoje.selic) + "%", cmp(hoje.selic, ge.selic_real, false)]);
         linhas.push(["Dívida bruta em 12 meses", pp(ge.dbgg_var_12m_pp) + " no início", "hoje " + pp(hoje.dbgg), cmp(hoje.dbgg, ge.dbgg_var_12m_pp, true)]);
         linhas.push(["Fluxo cambial", bi(ge.fluxo_musd) + " durante o choque", "hoje " + bi(hoje.fluxo) + " em 63 dias", ge.fluxo_musd < 0 ? cmp(hoje.fluxo, ge.fluxo_musd, false) : "no episódio não houve saída"]);
-        linhas.push(["Correlação diária real × BTC", F2.format(pr.rho_episodio) + " no episódio", "hoje " + F2.format(P.modelo.rho_250d) + "; o cenário usa " + F2.format(pr.rho_usado), cmp(P.modelo.rho_250d, pr.rho_episodio, true)]);
+        linhas.push(["Correlação diária real × BTC", F2.format(pr.rho_episodio) + " no episódio", "hoje " + F2.format(P.modelo.rho_250d) + "; o cenário usa " + F2.format(pr.rho_usado), pr.rho_usado > pr.rho_episodio && pr.rho_usado > P.modelo.rho_250d ? "— o cenário já usa um valor pior que os dois" : cmp(P.modelo.rho_250d, pr.rho_episodio, true)]);
       } else {
         linhas.push(["Bitcoin", "sem queda própria; contágio só pela correlação", "mediana do BTC/USD estável", "—"]);
         linhas.push(["Dívida bruta", "acima da trajetória do Focus (hipótese)", "Focus: " + F1.format(g.fiscal.focus_dbgg_prox_ano) + "% em " + (Number(P.data_base.slice(0, 4)) + 1) + "; " + pp(hoje.dbgg) + " em 12 meses", "a dívida já sobe: mais perto"]);
@@ -355,7 +361,7 @@
       var real = c.historico_real_pct && c.historico_real_pct["365"];
       var prem = '<li>Início: ' + (c.data_inicio_real ? data(c.data_inicio_real) : "análogos de " + c.analogos.map(data).join(", ")) + '.</li>' +
         '<li>Mediana: ' + esc(pr.deriva) + '.</li>' +
-        '<li>Dispersão em volta da réplica (premissa): ' + (c.tipo === "reconstruído" ? F0.format(pr.frac_dispersao * 100) + '% da volatilidade realizada no episódio, porque a mediana já carrega o choque' : F0.format(pr.frac_dispersao * 100) + '% da volatilidade média dos análogos no câmbio; no BTC, que não replica episódio, a volatilidade de longo prazo inteira') + ': ' + F0.format(pr.vol_anual_fx * 100) + '% a.a. no câmbio e ' + F0.format(pr.vol_anual_btc * 100) + '% a.a. no BTC. Inovações t com cópula t de ' + F0.format(pr.nu_copula) + ' graus de liberdade. Sem recalibração da cauda.</li>' +
+        '<li>Dispersão em volta da réplica (premissa): metade da volatilidade realizada no ' + (c.tipo === "reconstruído" ? 'episódio' : 'conjunto de análogos, no câmbio') + ' (' + F0.format(pr.vol_anual_fx_episodio * 100) + '% a.a. no câmbio' + (pr.vol_anual_btc_episodio ? ', ' + F0.format(pr.vol_anual_btc_episodio * 100) + '% no BTC' : '') + '), porque a mediana já carrega o choque, com piso na volatilidade de longo prazo do modelo (' + F0.format(pr.vol_anual_fx_base * 100) + '% e ' + F0.format(pr.vol_anual_btc_base * 100) + '%), porque um estresse não fica mais calmo que um ano comum. Resultado: ' + F0.format(pr.vol_anual_fx * 100) + '% a.a. no câmbio e ' + F0.format(pr.vol_anual_btc * 100) + '% a.a. no BTC' + (pr.piso_ativo_fx || pr.piso_ativo_btc ? ' (o piso está ativo)' : '') + '. Inovações t com cópula t de ' + F0.format(pr.nu_copula) + ' graus de liberdade. Sem recalibração da cauda.</li>' +
         '<li>Correlação usada: ' + F2.format(pr.rho_usado) + ', a maior entre ' + (c.tipo === "reconstruído" ? 'a do episódio (' + F2.format(pr.rho_episodio) + ')' : 'a atual (' + F2.format(pr.rho_episodio) + ')') + ' e o percentil 95 histórico da janela de 63 dias (' + F2.format(pr.rho_limiar_p95) + ').</li>' +
         '<li>Dados usados até ' + data(pr.fim_dos_dados) + '. Na validação do backtest, este cenário só cobre choques posteriores a essa data.</li>' +
         (real ? '<li>O que aconteceu de fato em 365 dias: USD/BRL ' + pct(real.usdbrl) + ', BTC/USD ' + pct(real.btcusd) + '. A recuperação, quando houve, não entra no cenário.</li>' : "");
@@ -374,13 +380,13 @@
     var nomeS = { alerta: "Alerta", atencao: "Atenção", normal: "Normal", sem_dado: "Sem dado" };
     // estresse que cada gatilho torna mais relevante (premissa do painel)
     var LIGA = { fiscal: ["fiscal2627", "fiscal2015"], selic_real: ["fiscal2015", "fiscal2627"], dxy: ["cripto2022", "covid2020"],
-      fluxo: ["covid2020", "fiscal2015"], riskoff: ["covid2020", "cripto2022"], halving: ["cripto2022"], etf: ["cripto2022"] };
+      fluxo: ["covid2020"], riskoff: ["covid2020", "cripto2022"], halving: ["cripto2022"] };
     var nomeC = {}; P.cenarios.forEach(function (c) { nomeC[c.id] = c.nome + " (" + c.periodo + ")"; });
     el("gatilhos").innerHTML = P.gatilhos.map(function (g) {
       var ds = Object.keys(g.datas || {}).map(function (k) { return data(g.datas[k]); });
       var liga = (LIGA[g.id] || []).map(function (i) { return nomeC[i]; }).filter(Boolean);
       return '<li class="gat"><div class="gat__topo"><span class="gat__nome">' + esc(g.nome) + '</span><span class="pill" data-s="' + g.status + '">' + nomeS[g.status] + '</span></div>' +
-        '<div><p>' + esc(g.leitura) + '</p>' + (liga.length ? '<p class="gat__liga">' + (g.status === "alerta" || g.status === "atencao" ? "Torna mais relevante o estresse " : "Estresse relacionado: ") + esc(liga.join(" e ")) + '.</p>' : '') +
+        '<div><p>' + esc(g.leitura) + '</p>' + (liga.length ? '<p class="gat__liga">' + (g.status === "alerta" || g.status === "atencao" ? (liga.length > 1 ? "Torna mais relevantes os estresses " : "Torna mais relevante o estresse ") : (liga.length > 1 ? "Estresses relacionados: " : "Estresse relacionado: ")) + esc(liga.join(" e ")) + '.</p>' : '') +
         '<small>' + esc(g.regra) + ' Fonte: ' + esc(g.fonte) + (ds.length ? '. Dado mais recente: ' + ds.join(", ") : "") + '.</small></div></li>';
     }).join("");
   }
@@ -400,7 +406,21 @@
         });
       });
     });
-    return { dentro: dentro, total: ag.length, sig: sig, fora: fora, semCob: semCob };
+    var sens = {};
+    ["metade_sem_piso", "inteira"].forEach(function (r) {
+      var n = 0;
+      P.contencao_estresses.forEach(function (c) {
+        ATIVOS.forEach(function (a) {
+          HZ.forEach(function (z) {
+            var x = c.celulas[a][z]; if (!x) return;
+            var pit = pitChoque(c.origem, a, z);
+            if (!(pit !== undefined && pit >= .05) && !x.contido_por_sens[r].length) n++;
+          });
+        });
+      });
+      sens[r] = n;
+    });
+    return { dentro: dentro, total: ag.length, sig: sig, fora: fora, semCob: semCob, sens: sens };
   }
   function pitChoque(origem, a, z) {
     var c = P.backtest.choques.filter(function (x) { return x.origem === origem; })[0];
@@ -415,7 +435,7 @@
     return '<td class="' + cls + '"><span aria-hidden="true">' + mk + ' </span>' + F1.format(x.p10 * 100) + '%<span class="sr-only"> (' + sr + ')</span>' +
       (sig ? ' <abbr title="desvio estatisticamente significativo">!</abbr>' : '') +
       (opostos ? ' <abbr class="opostos" title="os dois cortes erram em direções opostas">⚠</abbr>' : '') +
-      '<small>IC95 ' + F0.format(x.lo * 100) + '–' + F0.format(x.hi * 100) + '% · n≈' + x.n_eff + '</small></td>';
+      '<small><span class="long">IC95 </span>' + F0.format(x.lo * 100) + '–' + F0.format(x.hi * 100) + '% · n≈' + x.n_eff + '</small></td>';
   }
   function opostos(a, z) {
     var c = ["2018", "2021"].map(function (k) { return P.backtest.por_corte[k].filter(function (q) { return q.ativo === a && String(q.h) === z; })[0]; });
@@ -441,7 +461,7 @@
     el("bt-veredito").innerHTML =
       '<li data-s="' + (v.dentro === v.total ? "ok" : "fora") + '"><b>' + v.dentro + ' de ' + v.total + '</b> células na faixa de 8% a 12%, com os dois cortes juntos. <span>Meta principal: não atendida por completo.</span></li>' +
       '<li data-s="' + (v.sig ? "fora" : "neutro") + '"><b>' + v.sig + ' de 24</b> células com desvio estatisticamente significativo, olhando cada corte. <span>Isso não é aprovação: o teste tem pouco poder. Com 3 a 10 observações independentes nos horizontes longos, só desvios grandes seriam detectados.</span></li>' +
-      '<li data-s="' + (v.semCob.length ? "fora" : "ok") + '"><b>' + (v.semCob.length ? v.semCob.length + (v.semCob.length > 1 ? " casos" : " caso") + " de choque real sem cobertura" : "Todos os choques cobertos") + '</b> (ativo e horizonte) pelo P5 da base ou de um estresse construído antes do choque. <span>' + esc(v.semCob.join("; ")) + '</span></li>';
+      '<li data-s="' + (v.semCob.length ? "fora" : "ok") + '"><b>' + (v.semCob.length ? v.semCob.length + (v.semCob.length > 1 ? " casos" : " caso") + " de choque real sem cobertura" : "Todos os choques cobertos") + '</b> (ativo e horizonte) pelo P5 da base ou de um estresse construído antes do choque. <span>' + esc(v.semCob.join("; ")) + '. Sensibilidade à dispersão dos estresses: ' + v.sens.metade_sem_piso + ' casos com metade da volatilidade do episódio sem piso; ' + v.sens.inteira + ' com a volatilidade inteira.</span></li>';
     var nOp = 0; ATIVOS.forEach(function (a) { HZ.forEach(function (z) { if (opostos(a, z)) nOp++; }); });
     el("bt-cap").innerHTML = "Os dois cortes juntos, 2018 a 2026: frequência em que o realizado ficou pior que o P10. ✓ na faixa de 8% a 12%; ▲ acima (o modelo subestimou o risco); ▼ abaixo (pessimista demais). “!” marcaria desvio estatisticamente significativo; ⚠ marca as " + nOp + " células em que os dois cortes erram em direções opostas e o agregado só parece calibrado porque os erros se compensam. É o caso do câmbio: a calibração dele depende do regime.";
     el("bt").innerHTML = tabelaBt(bt.agregado, "Os dois cortes juntos, 2018 a 2026: frequência em que o realizado ficou pior que o P10.", true);
@@ -494,7 +514,7 @@
       "<b>BTC/BRL nunca é projetado sozinho</b>: em cada trajetória, BTC/BRL = BTC/USD × USD/BRL.",
       "<b>Sem previsão pontual</b>: toda saída é distribuição (P50, P10, P5, P1), e o P90 aparece só como referência do lado favorável.",
       "<b>Risk-off conjunto</b> na base, em 365 dias: USD/BRL sobe mais de 10% e BTC/USD cai mais de 30% ao mesmo tempo em " + pct(mo.prob_riskoff_conjunto_365d).replace("+", "") + " das trajetórias (simulação sem recalibração). Os dois P1 juntos: " + F2.format(mo.prob_p1_conjunto_365d * 100) + "% (" + F0.format(mo.prob_p1_conjunto_365d * mo.n_trajetorias) + " de " + F0.format(mo.n_trajetorias) + " trajetórias).",
-      "<b>Estresses</b>: a mediana repete o episódio dia a dia até o pior ponto, sem recuperação; a dispersão em volta é metade da volatilidade do episódio (premissa) e a cauda não é recalibrada."
+      "<b>Estresses</b>: a mediana repete o episódio dia a dia até o pior ponto, sem recuperação. A dispersão em volta é metade da volatilidade do episódio, com piso na volatilidade de longo prazo do modelo (" + F0.format(P.cenarios[0].premissas.vol_anual_fx_base * 100) + "% a.a. no câmbio, " + F0.format(P.cenarios[0].premissas.vol_anual_btc_base * 100) + "% no BTC): um estresse não fica mais calmo que um ano comum. Premissa, não estimativa. A cauda dos estresses não é recalibrada."
     ];
     el("premissas").innerHTML = itens.filter(Boolean).map(function (t) { return "<li>" + t + "</li>"; }).join("");
     el("fontes").innerHTML = '<thead><tr><th scope="col">Série</th><th scope="col">Fonte</th><th scope="col">Último dado</th><th scope="col">Coletado em</th></tr></thead><tbody>' +

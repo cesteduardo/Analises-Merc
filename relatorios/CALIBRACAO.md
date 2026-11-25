@@ -98,23 +98,25 @@ Percentil do valor realizado na distribuição-base projetada na véspera do cho
 
 | Choque | Ativo | 30 dias | 90 dias | 180 dias | 365 dias |
 |---|---|---|---|---|---|
-| Covid | USD/BRL | 18% <br><sub>**nenhum**</sub> | 32% <br><sub>**nenhum**</sub> | 27% <br><sub>Crise fiscal</sub> | 25% <br><sub>base</sub> |
+| Covid | USD/BRL | 18% <br><sub>Crise fiscal</sub> | 32% <br><sub>**nenhum**</sub> | 27% <br><sub>Crise fiscal</sub> | 25% <br><sub>base</sub> |
 | Covid | BTC/USD | −48% <br><sub>**nenhum**</sub> | −8% <br><sub>base</sub> | 15% <br><sub>base</sub> | 440% <br><sub>base</sub> |
 | Covid | BTC/BRL | −38% <br><sub>**nenhum**</sub> | 21% <br><sub>base</sub> | 46% <br><sub>base</sub> | 575% <br><sub>base</sub> |
 | Inverno cripto | USD/BRL | 2% <br><sub>base</sub> | −3% <br><sub>base</sub> | −6% <br><sub>base</sub> | −3% <br><sub>base</sub> |
-| Inverno cripto | BTC/USD | −27% <br><sub>base</sub> | −32% <br><sub>base</sub> | −55% <br><sub>base</sub> | −73% <br><sub>Covid</sub> |
-| Inverno cripto | BTC/BRL | −26% <br><sub>base</sub> | −34% <br><sub>base</sub> | −58% <br><sub>base</sub> | −74% <br><sub>**nenhum**</sub> |
+| Inverno cripto | BTC/USD | −27% <br><sub>base</sub> | −32% <br><sub>base</sub> | −55% <br><sub>base</sub> | −73% <br><sub>Covid, Crise fiscal</sub> |
+| Inverno cripto | BTC/BRL | −26% <br><sub>base</sub> | −34% <br><sub>base</sub> | −58% <br><sub>base</sub> | −74% <br><sub>Covid</sub> |
 | Pacote fiscal de 2024 | USD/BRL | 5% <br><sub>base</sub> | 14% <br><sub>base</sub> | 4% <br><sub>base</sub> | −2% <br><sub>base</sub> |
 | Pacote fiscal de 2024 | BTC/USD | 15% <br><sub>base</sub> | 48% <br><sub>base</sub> | 30% <br><sub>base</sub> | 87% <br><sub>base</sub> |
 | Pacote fiscal de 2024 | BTC/BRL | 20% <br><sub>base</sub> | 68% <br><sub>base</sub> | 36% <br><sub>base</sub> | 83% <br><sub>base</sub> |
 
 Cada célula traz a variação realizada e quem a contém no P5: “base” quando a própria distribuição-base já a continha.
 
+**Sensibilidade à dispersão dos estresses.** Casos sem cobertura com a regra em uso (metade da volatilidade do episódio, com piso na de longo prazo do modelo): 3; com metade sem piso: 5; com a volatilidade inteira do episódio: 2.
+
 ## Veredito
 
 - Critério 1 (agregado, 8%–12%): **não atendido** — 7 de 12 células na faixa.
 - Critério 2 (nenhuma falha significativa por corte): **atendido** — 0 de 24.
-- Critério 3 (choques no P5 da base ou de um estresse independente): **não atendido** — sem cobertura: Covid · USD/BRL · 30 dias; Covid · USD/BRL · 90 dias; Covid · BTC/USD · 30 dias; Covid · BTC/BRL · 30 dias; Inverno cripto · BTC/BRL · 365 dias.
+- Critério 3 (choques no P5 da base ou de um estresse independente): **não atendido** — sem cobertura: Covid · USD/BRL · 90 dias; Covid · BTC/USD · 30 dias; Covid · BTC/BRL · 30 dias.
 
 Células agregadas fora da faixa: BTC/BRL 365 dias (7,8%), BTC/USD 30 dias (13,0%), BTC/USD 365 dias (7,8%), USD/BRL 90 dias (7,6%), USD/BRL 180 dias (7,3%). Todas têm IC95 que contém 10%, isto é, o teste não distingue essas frequências de uma calibração exata. Empurrá-las para dentro da faixa exigiria ajustar o modelo ao próprio período de teste, o que trocaria um erro pequeno e visível por sobreajuste invisível.
 

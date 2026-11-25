@@ -37,3 +37,22 @@ O crítico é um subagente que vê apenas capturas do painel renderizado (deskto
 | 27 | Cosmético | Datas ISO e nomes internos na tabela de fontes. | Datas em pt-BR e nomes legíveis. |
 
 O que o crítico considerou bem resolvido: direção do "ruim" fixa e explicada; BTC/BRL derivado na mesma trajetória; pior caso primeiro com âncora histórica; backtest exposto com franqueza (IC de Wilson, n efetivo, cortes separados, critério declarado como não pré-registrado); estresses com premissas explícitas; gatilhos com limiar, fonte e data; ausência de dado sobre ETFs declarada.
+
+## Rodada 2 — 25/11/2026 (commit fd4a133)
+
+**Veredito: REPROVADO** — 0 críticos, 2 maiores, 7 menores, 3 cosméticos. Dos 27 defeitos da rodada 1, 24 resolvidos e 3 parciais (7, 19, 21).
+
+| # | Severidade | Defeito | Tratamento na rodada 3 |
+|---|---|---|---|
+| N1 | Maior | Em 1600 px, a coluna de 365 dias (a do P1) ficava cortada nos quadros do BTC, nas colunas de um terço. | Unidade no cabeçalho ("em US$ mil") e números sem sufixo nas células. |
+| N2 | Maior | Com metade da volatilidade do episódio, a dispersão do câmbio nos estresses caía para 8% a 11% a.a., abaixo da de um ano comum; estresses mais brandos que a base no mapa de calor, sem aviso; casos da Covid perdiam cobertura por isso, não pela anterioridade. | Piso na volatilidade de longo prazo do modelo; aviso no mapa de calor quando um estresse é mais brando que a base; sensibilidade do critério 3 a três regras de dispersão (5, 3 e 2 casos sem cobertura). |
+| 7 (parcial) | Menor | O selo do topo não dizia que a calibração do câmbio depende do regime. | Selo cita os erros opostos dos dois cortes. |
+| 19 (parcial) | Menor | Históricos de comprimentos diferentes entre os leques; rótulo de data sobreposto a "hoje" no celular; "30d" e "30". | Mesmo comprimento nos três; rótulo só quando cabe; rótulos iguais. |
+| 21 (parcial) | Menor | Distância da correlação enganosa quando o cenário usa um valor pior que os dois; fluxo cambial ligado a 2015, que não teve saída; ETFs ligados a 2022, sem ETF à vista na época. | "o cenário já usa um valor pior"; ligações retiradas. |
+| N3 | Menor | A metodologia atribuía à anterioridade casos que eram efeito da dispersão. | 7.3 separa os dois efeitos. |
+| N4 | Menor | 0,53% no topo e 0,54% no leque para o mesmo quantil. | Mesmo cálculo nos dois lugares. |
+| N5 | Menor | Retângulo claro vazando e nota cortada no cartão de gatilhos. | Artefato da captura recortada (o `backdrop-filter` falha na borda do recorte); a captura passou a ser de página inteira, cortada depois. |
+| N6 | Menor | Tabela da seção 2 da metodologia ainda falava em "trajetórias". | "probabilidade estimada". |
+| N7 | Cosmético | Concordância ("o estresse X e Y"). | Plural. |
+| N8 | Cosmético | "O P1 vai além" quando o P1 do BTC estava no nível do pior ano. | "no nível do pior ano observado" quando a diferença é de até 3 p.p. |
+| N9 | Cosmético | Backtest apertado no celular. | IC sem o rótulo "IC95" no celular. |
