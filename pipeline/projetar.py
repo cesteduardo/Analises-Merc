@@ -51,6 +51,7 @@ def meta_serie(nome, data_base):
     ok = [x for x in datas if x <= str(data_base.date())]
     return {"serie": nome, "fonte": d["fonte"], "url": d["url"], "coletado_em": d["coletado_em"],
             "ultimo_dado": max(ok) if ok else None, "primeiro_dado": min(datas) if datas else None,
+            "mensal": nome in ("dbgg_pib", "primario_12m_pib", "ipca_12m"),
             "n": len(datas)}
 
 
@@ -64,12 +65,14 @@ def wilson(p, n, z=1.96):
 
 
 def classe_calib(p, lo, hi):
-    """na_meta: ponto em 8–12%; inconclusivo: ponto fora, mas o IC95 cruza a meta;
-    acima/abaixo: o IC95 inteiro fora da meta."""
+    """na_meta: ponto em 8–12% e IC95 com menos de 15 p.p. de largura;
+    na_meta_fraca: ponto na faixa, mas IC largo (sem poder estatístico);
+    inc_acima / inc_abaixo: ponto fora, mas o IC cruza a faixa;
+    acima / abaixo: o IC inteiro fora da faixa."""
     if .08 <= p <= .12:
-        return "na_meta"
+        return "na_meta" if hi - lo < .15 else "na_meta_fraca"
     if hi >= .08 and lo <= .12:
-        return "inconclusivo"
+        return "inc_acima" if p > .12 else "inc_abaixo"
     return "acima" if p > .12 else "abaixo"
 
 
@@ -207,6 +210,9 @@ def main():
     sb0 = simular_garch(gb, vb, e2, 0.0).cumsum(axis=1)
     lv = niveis(sf, sb, s0f, s0b)
     lv0 = niveis(sf0, sb0, s0f, s0b)
+    # sensibilidade: o mesmo modelo sem a deriva do juro real
+    fx_sd = s0f * np.exp(-simular_com_crise(gf, vf, e1, 0.0, cf, np.random.default_rng(SEED + 1)).cumsum(axis=1)[:, -1])
+    sem_deriva = {"P50": float(np.quantile(fx_sd, .5)), "P1": float(np.quantile(fx_sd, .99))}
     spot = {"usdbrl": s0f, "btcusd": s0b, "btcbrl": s0f * s0b}
     base = {a: {"horizontes": resumo_dist(a, lv[a], spot[a]), "leque": leque(a, lv[a], spot[a]),
                 "drawdown": drawdowns(a, lv[a], spot[a])} for a in ATIVOS}
@@ -223,6 +229,7 @@ def main():
         "prob_toca_p1_usdbrl": float((lv["usdbrl"].max(axis=1) >= p1f).mean()),
         "prob_toca_p1_btcusd": float((lv["btcusd"].min(axis=1) <= p1b).mean()),
         "prob_riskoff_conjunto_365d": float(((fim_f / s0f > 1 / 0.9) & (fim_b / s0b < 0.7)).mean()),
+        "usdbrl_sem_deriva": sem_deriva,
         "def_riskoff": "o real perde mais de 10% e o BTC/USD cai mais de 30%, juntos, no fim de 365 dias",
     }
 
@@ -261,6 +268,8 @@ def main():
              resumo="Hipótese construída: transição pós-eleitoral com dúvida sobre o arcabouço fiscal. O real segue a média de três episódios fiscais; o BTC não tem trajetória própria e só sofre contágio pela correlação piorada."),
     ]
     vol_atual_f, vol_atual_b = math.sqrt(vf * 252), math.sqrt(vb * 252)
+    v0f, v0b = max(vf, gf.var_alvo), max(vb, gb.var_alvo)
+    vol_ini_f, vol_ini_b = math.sqrt(v0f * 252), math.sqrt(v0b * 252)
     cenarios = []
     for c in CEN:
         if c["tipo"] == "reconstruído":
@@ -270,7 +279,9 @@ def main():
             kf, kb = int(np.argmin(cfh)), int(np.argmin(cbh))
             T = max(kf, kb)
             alvo_f, alvo_b = dd_um(cfh), dd_um(cbh)
-            mf, mb = ate(xf_h, T), ate(xb_h, T)
+            # cada ativo segue a própria trajetória até o próprio pior ponto e para:
+            # nenhuma recuperação é assumida, nem a de um ativo enquanto o outro ainda cai
+            mf, mb = ate(xf_h, kf), ate(xb_h, kb)
             w = max(T + 1, 63)
             rho_ep = float(np.corrcoef(xf_h[:w], xb_h[:w])[0, 1])
             data_pior = str(idx[i0 + 1 + T].date())
@@ -285,8 +296,9 @@ def main():
             rho_ep, d0, data_pior = None, None, None
         rho_c = max(rho_ep if rho_ep is not None else rho_250, rho_stress)
         a1, a2 = inovacoes(N, H_MAX, rho_c, NU_C_STRESS, gf.nu, gb.nu, rng)
-        nf = simular_garch(gf, vf, a1, 0.0)   # ruído-base, sem camada de crise
-        nb = simular_garch(gb, vb, a2, 0.0)
+        # ruído-base, sem camada de crise, partindo de pelo menos a volatilidade de longo prazo
+        nf = simular_garch(gf, v0f, a1, 0.0)
+        nb = simular_garch(gb, v0b, a2, 0.0)
         m_f, lam_f, med_f = calibrar_estresse(mf, nf, alvo_f)
         if alvo_b is not None:
             m_b, lam_b, med_b = calibrar_estresse(mb, nb, alvo_b)
@@ -299,12 +311,17 @@ def main():
                 f0, f1 = df["fx"].iloc[i0], df["fx"].iloc[i0 + hp]
                 b0, b1 = df["btc"].iloc[i0], df["btc"].iloc[i0 + hp]
                 reg[str(hd)] = {"usdbrl": f1 / f0 - 1, "btcusd": b1 / b0 - 1, "btcbrl": (f1 * b1) / (f0 * b0) - 1}
-            f0, fT = df["fx"].iloc[i0], df["fx"].iloc[i0 + 1 + T]
-            b0, bT = df["btc"].iloc[i0], df["btc"].iloc[i0 + 1 + T]
-            no_pior = {"usdbrl": fT / f0 - 1, "btcusd": bT / b0 - 1, "btcbrl": fT * bT / (f0 * b0) - 1}
-            dd_hist = {"usdbrl": alvo_f, "btcusd": alvo_b, "btcbrl": dd_um(np.cumsum(xb_h + xf_h))}
+            cbb = np.cumsum(xb_h - xf_h)   # log de BTC/BRL observado
+            kbb = int(np.argmin(cbb))
+            uf, ub = float(np.exp(-cfh[kf]) - 1), float(np.exp(cbh[kb]) - 1)
+            no_pior = {"usdbrl": uf, "btcusd": ub, "btcbrl": (1 + uf) * (1 + ub) - 1}
+            pior_obs = {"usdbrl": {"pct": uf, "data": str(idx[i0 + 1 + kf].date()), "dia": kf + 1},
+                        "btcusd": {"pct": ub, "data": str(idx[i0 + 1 + kb].date()), "dia": kb + 1},
+                        "btcbrl": {"pct": float(np.exp(cbb[kbb]) - 1), "data": str(idx[i0 + 1 + kbb].date()), "dia": kbb + 1}}
+            dd_hist = {"usdbrl": alvo_f, "btcusd": alvo_b, "btcbrl": dd_um(cbb)}
         else:
             no_pior = {"usdbrl": float(np.exp(-cfh[T]) - 1), "btcusd": 0.0, "btcbrl": float(np.exp(cfh[T]) - 1)}
+            pior_obs = None
             dd_hist = {"usdbrl": alvo_f, "btcusd": None, "btcbrl": None}
         cenarios.append({
             **c,
@@ -312,13 +329,14 @@ def main():
             "premissas": {
                 "dias_ate_pior": T + 1, "data_pior": data_pior,
                 "dias_ate_pior_fx": kf + 1, "dias_ate_pior_btc": (kb + 1) if kb is not None else None,
-                "choque_no_pior_pct": no_pior,
+                "choque_no_pior_pct": no_pior, "pior_observado": pior_obs,
                 "drawdown_historico": dd_hist,
                 "drawdown_mediano_obtido": {"usdbrl": med_f, "btcusd": med_b},
                 "lambda_fx": lam_f, "lambda_btc": lam_b, "m_fx": m_f, "m_btc": m_b,
                 "tendencia_aplicada_pct": {"usdbrl": float(np.exp(-m_f * mf.sum()) - 1), "btcusd": float(np.exp(m_b * mb.sum()) - 1)},
-                "vol_anual_fx": lam_f * vol_atual_f, "vol_anual_btc": lam_b * vol_atual_b,
+                "vol_anual_fx": lam_f * vol_ini_f, "vol_anual_btc": lam_b * vol_ini_b,
                 "vol_atual_fx": vol_atual_f, "vol_atual_btc": vol_atual_b,
+                "vol_inicial_fx": vol_ini_f, "vol_inicial_btc": vol_ini_b,
                 "rho_episodio": rho_ep, "rho_usado": rho_c, "rho_p95_63d": rho_stress, "rho_hoje": rho_250,
                 "nu_copula": NU_C_STRESS, "camada_crise": False,
                 "pesos_analogos": [1 / 3] * 3 if c["tipo"] == "construído" else None,

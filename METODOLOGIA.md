@@ -82,7 +82,7 @@ O BTC não tem deriva. Para o câmbio, a deriva diária depende do juro real ex-
 
 - Amostra completa: a ≈ −0,029, b ≈ 0,0046 (t ≈ 2,7). O juro real neutro, em que a deriva é zero, fica perto de 6,3%.
 - Com o juro real de hoje, acima do neutro, a mediana do dólar recua cerca de 4% ao ano antes da camada de crise.
-- Usamos o ex-post porque o Focus de 12 meses coletado só começa em 2014 e o ajuste começa em 2003. O gatilho "Selic real" do painel mostra a versão ex-ante, mais intuitiva.
+- Usamos o ex-post porque a série do Focus de 12 meses coletada só começa em 2018 e o ajuste começa em 2003. Pelo mesmo motivo, nas condições dos episódios de 2002 e 2015 a Selic real aparece marcada como ex-post. O gatilho "Selic real" do painel mostra a versão ex-ante, mais intuitiva.
 - Testamos também deriva zero, o carrego (Selic − Fed Funds) e tendências passadas (ver `relatorios/CALIBRACAO.md`). A deriva pelo juro real foi a que melhor calibrou, mas foi **escolhida olhando o backtest**, o que é uma forma branda de sobreajuste.
 - Referências mostradas no painel, que não entram no modelo: o forward de 1 ano pelo diferencial Selic − Fed Funds (embute carrego, não expectativa) e a mediana do Focus para o câmbio no fim do ano corrente e do próximo.
 
@@ -120,14 +120,14 @@ Cada cenário é uma distribuição condicional: "se as condições do episódio
 
 **Regra comum (premissas):**
 
-- **Pior ponto conjunto**: para os episódios reconstruídos, localizamos o pior ponto de cada ativo dentro de 252 dias úteis e usamos o mais tardio dos dois (T\*). Os dois ativos seguem a trajetória histórica dia a dia **até a mesma data T\*** e ficam parados depois. Assim o BTC/BRL do cenário corresponde a um momento que de fato existiu. **A recuperação depois do pior ponto não é assumida.**
-- **Sem dupla contagem**: a trajetória histórica já contém a volatilidade do episódio. Por isso não somamos a ela a volatilidade realizada inteira. O cenário é `m · trajetória histórica + λ · ruído`, em que o ruído vem do GARCH-t-base partindo da volatilidade de hoje, sem a camada de crise:
+- **Pior ponto de cada ativo**: para os episódios reconstruídos, cada ativo segue a própria trajetória histórica, dia a dia, até o próprio pior ponto dentro de 252 dias úteis, e fica parado depois. **Nenhuma recuperação é assumida**, nem a de um ativo enquanto o outro ainda cai. Quando os dois piores pontos não foram no mesmo dia (Covid: BTC em 12/03/2020, câmbio em 14/05/2020), a combinação é mais severa que qualquer dia do episódio. Essa é uma premissa pessimista deliberada; o cartão mostra, ao lado, o pior BTC/BRL realmente observado.
+- **Sem dupla contagem**: a trajetória histórica já contém a volatilidade do episódio. Por isso não somamos a ela a volatilidade realizada inteira. O cenário é `m · trajetória histórica + λ · ruído`, em que o ruído vem do GARCH-t-base, sem a camada de crise, partindo da maior entre a volatilidade condicional de hoje e a média de longo prazo (num estresse, a volatilidade de partida não fica abaixo do normal):
   1. com λ = 1, escolhemos m entre 0 e 1 (bisseção) para que a **mediana do drawdown máximo em 365 dias seja igual ao drawdown histórico do episódio**;
-  2. se a volatilidade de hoje, sozinha, já gera drawdown mediano maior que o histórico (caso do BTC em 2015), a trajetória sai (m = 0) e λ é reduzido até a mediana bater.
+  2. se a volatilidade de partida, sozinha, já gera drawdown mediano maior que o histórico (caso do BTC em 2015), a trajetória sai (m = 0) e λ é reduzido até a mediana bater.
   Os valores de m e λ de cada cenário aparecem nas premissas do cartão. O BTC/BRL não é calibrado: sai do produto das duas trajetórias, e o painel mostra ao lado o drawdown histórico dele.
 - **Correlação**: a maior entre a do episódio (até T\*, pelo menos 63 dias) e o percentil 95 histórico da correlação móvel de 63 dias; cópula t com 4 graus de liberdade.
-- **Caudas**: P5 e P1 de um estresse somam o episódio à volatilidade de hoje. Eles ficam além do pior movimento histórico de 12 meses de cada ativo, que o painel mostra como âncora, e por isso não são chamados de plausíveis.
-- **Ordem**: do mais severo ao menos severo pelo drawdown mediano em 365 dias **do ativo selecionado**.
+- **Caudas e comparação com a base**: cada cartão compara, no ativo selecionado, o P5 de 365 dias e a queda mediana do estresse com os da base, e diz quando o estresse é **mais brando que a base** (é o caso do BTC nos episódios em que ele não foi o centro da crise, como 2015 e o cenário fiscal 2026–27). Também compara o P1 do estresse com o pior movimento histórico de 12 meses. O P1 de um estresse nunca é chamado de pior caso plausível.
+- **Ordem**: do mais severo ao menos severo pelo drawdown mediano em 365 dias **do ativo selecionado**. No mapa de calor, a base entra na mesma ordenação.
 
 | Cenário | Tipo | Início | Base |
 |---|---|---|---|
@@ -171,14 +171,14 @@ Cada gatilho tem uma regra explícita de status (normal, atenção, alerta). Os 
 - **Métrica**: frequência com que o realizado ficou pior que o P10. Meta: entre 8% e 12%.
 - **Choques reais**: posição do realizado na distribuição projetada na véspera da Covid (14/02/2020), do inverno cripto (10/11/2021) e do pacote fiscal (30/09/2024). O critério é que o P5 contenha o choque.
 - **Limitação**: as origens se sobrepõem, então o número de observações independentes é pequeno, sobretudo em 365 dias (cerca de 3 a 4 por corte). Painel e relatório trazem o intervalo de confiança de 95% de Wilson, calculado com o número aproximado de janelas independentes (`n × 5 / passos`).
-- **Classificação**: "na meta" quando a frequência fica entre 8% e 12%; "inconclusivo" quando fica fora, mas o intervalo cruza a faixa; "risco subestimado" ou "pessimista demais" só quando o intervalo inteiro fica fora.
+- **Classificação**: "na meta" quando a frequência fica entre 8% e 12% **e** o intervalo tem menos de 15 p.p. de largura; "na faixa, sem poder estatístico" quando o ponto está na faixa mas o intervalo é largo; "inconclusivo, acima" ou "abaixo" quando o ponto fica fora mas o intervalo cruza a faixa; "risco subestimado" ou "pessimista demais" só quando o intervalo inteiro fica fora. O painel mostra o resultado **por corte**, que é o que a especificação pede; a soma dos cortes aparece só como complemento, porque junta erros de sinal contrário.
 
 ### 7.2 Estado atual da calibração
 
 **A especificação ainda não está cumprida.** Resultados completos em `relatorios/CALIBRACAO.md`; resumo da variante em uso (deriva pelo juro real e camada de crise):
 
-- **Por corte**: 8 de 24 combinações na meta; as outras 16 são inconclusivas, e nenhuma fica fora com significância. A amostra independente é pequena demais para confirmar ou rejeitar a calibração na maior parte das células.
-- **Somando os dois cortes**: 9 de 12 na meta; BTC/USD em 30 e 365 dias e BTC/BRL em 180 dias ficam inconclusivos.
+- **Por corte**: só 2 de 24 combinações ficam na meta com intervalo estreito (USD/BRL e BTC/BRL em 30 dias, corte 2021); 6 ficam na faixa sem poder estatístico; as outras 16 são inconclusivas, e nenhuma fica fora com significância. A amostra independente é pequena demais para confirmar ou rejeitar a calibração na maior parte das células.
+- **Somando os dois cortes**: 9 de 12 com o ponto na faixa, mas isso junta o erro para cima de 2018 com o erro para baixo de 2021 no câmbio.
 - No **corte 2018**, o modelo subestimou a desvalorização do real de 2018 a 2020 (15% a 20% das origens abaixo do P10 até 180 dias). No **corte 2021**, ficou pessimista demais em USD/BRL de 90 e 180 dias (3% a 5%).
 - **Choques reais**: a Covid ficou além do P1 em 30 dias nos três ativos e em 90 dias no câmbio. O inverno cripto ficou entre o P5 e o P1 em BTC/USD (365 dias) e BTC/BRL (180 e 365 dias). O critério "o P5 contém os choques reais" não é atendido; esses episódios entram como estresses justamente porque a distribuição-base não os contém.
 

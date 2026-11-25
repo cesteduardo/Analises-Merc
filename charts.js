@@ -38,8 +38,9 @@
     if (v >= 1e5 || arred) return pre + F0.format(v / 1e3) + " mil";
     return pre + F1.format(v / 1e3) + " mil";
   }
-  function curto(a, v) {
-    if (a === "usdbrl") return F2.format(v);
+  function curto(a, v, eixo) {
+    if (a === "usdbrl") return eixo ? F0.format(v) : F2.format(v);
+    if (eixo && v >= 1e3 && v < 1e6) return nf(v < 1e4 ? 1 : 0).format(v / 1e3) + " mil";
     if (v >= 1e6) return F1.format(v / 1e6) + " mi";
     if (v >= 1e5) return F0.format(v / 1e3) + " mil";
     return F1.format(v / 1e3) + " mil";
@@ -55,6 +56,8 @@
   function data(s) { if (!s) return "—"; var p = String(s).slice(0, 10).split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
   var MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
   function mesAno(s) { var p = String(s).split("-"); return MES[Number(p[1]) - 1] + "/" + p[0].slice(2); }
+  function mesAno4(s) { if (!s) return "—"; var p = String(s).split("-"); return MES[Number(p[1]) - 1] + "/" + p[0]; }
+  function dataHora(s) { return data(s) + " " + String(s).slice(11, 16) + " UTC"; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function el(id) { return document.getElementById(id); }
   /* cor pela direção ruim de cada ativo */
@@ -95,12 +98,25 @@
       '<span class="regua__rot regua__rot--fim" style="left:100%">pior →</span></div>';
   }
 
+  function choquesFora(a) {
+    var out = [];
+    P.backtest.choques.forEach(function (ch) {
+      HZ.forEach(function (z) {
+        var v = ch.pit[a] && ch.pit[a][z];
+        if (v !== undefined && v < .05) out.push({ nome: ch.nome.split(" (")[0], h: z, v: v, alem: v < .01 });
+      });
+    });
+    return out;
+  }
+  function choquesTexto(a) {
+    var f = choquesFora(a);
+    if (!f.length) return "Choques reais: todos dentro do P5.";
+    return "Fora do P5: " + f.map(function (x) { return x.nome + " em " + x.h + " dias" + (x.alem ? " (além do P1)" : ""); }).join("; ") + ".";
+  }
   function calibTexto(a) {
-    var cl = HZ.map(function (z) { return bt("agregado", a, z).classe; });
-    var ok = cl.filter(function (c) { return c === "na_meta"; }).length;
-    var c365 = bt("2018", a, 365).classe === "na_meta" && bt("2021", a, 365).classe === "na_meta";
-    return "Backtest: " + ok + " de 4 horizontes na meta somando os dois cortes" +
-      (c365 ? "." : "; em 365 dias, a meta não se confirma nos dois cortes (amostra de 3 a 4 janelas independentes).");
+    var n = function (corte) { return HZ.filter(function (z) { return bt(corte, a, z).classe === "na_meta"; }).length; };
+    var f = function (corte) { return HZ.filter(function (z) { return bt(corte, a, z).classe === "na_meta_fraca"; }).length; };
+    return "Backtest por corte: 2018, " + n("2018") + " de 4 na meta com confiança (" + f("2018") + " na faixa sem poder estatístico); 2021, " + n("2021") + " de 4 (" + f("2021") + "). " + choquesTexto(a);
   }
 
   function hero() {
@@ -120,6 +136,8 @@
         '<div><dt>P10 · 1 em 10</dt><dd class="n">' + moeda(a, h.P10.nivel, true) + '<small>' + pct(h.P10.var_pct, 0) + '</small></dd></div>' +
         '<div><dt>P5 · 1 em 20</dt><dd class="n">' + moeda(a, h.P5.nivel, true) + '<small>' + pct(h.P5.var_pct, 0) + '</small></dd></div></dl>' +
         '<div class="ativo__extra"><p>Pior estresse para ' + NOMES[a] + ': ' + esc(pe.nome) + ' (' + esc(pe.periodo) + '), mediana de ' + moeda(a, pv.nivel, true) + ' (' + pct(pv.var_pct, 0) + ') em 365 dias.</p>' +
+        (a === "usdbrl" ? '<p>A mediana cai porque o juro real alto favorece o real (deriva de ' + pct(P.modelo.deriva_fx.deriva_anual_usdbrl_pct) + ' ao ano, escolhida olhando o backtest). Sem essa deriva: mediana de ' + moeda(a, P.pior_caso.usdbrl_sem_deriva.P50, true) + ' e P1 de ' + moeda(a, P.pior_caso.usdbrl_sem_deriva.P1, true) + '.</p>' : "") +
+        (a === "btcbrl" ? '<p>Calculado em cada trajetória como BTC/USD × USD/BRL: a alta do dólar amortece a queda em reais.</p>' : "") +
         '<p>' + esc(calibTexto(a)) + '</p></div>' +
         '<button type="button" class="ativo__ver" data-sel="' + a + '">' + (a === estado.ativo ? "Exibido nas seções abaixo" : "Ver " + NOMES[a] + " nas seções abaixo") + '</button>' +
         '</article>';
@@ -141,18 +159,22 @@
     var at = P.gatilhos.filter(function (g) { return g.status === "atencao"; }).map(function (g) { return g.nome; });
     var c = contagem();
     el("estado").innerHTML =
-      '<li data-s="fora"><i aria-hidden="true"></i><span><b>Calibração incompleta.</b> ' + c.corte + " de 24 combinações na meta de 8% a 12% por corte, " + c.agr + " de 12 somando os cortes, e os choques da Covid em 30 dias ficaram além do P1. A especificação ainda não está cumprida (seção 6).</span></li>" +
-      '<li data-s="' + (al.length ? "alerta" : "normal") + '"><i aria-hidden="true"></i><span><b>' + (al.length ? al.length + " gatilhos em alerta:" : "Nenhum gatilho em alerta.") + "</b> " + esc(al.join(", ")) + (at.length ? ". Em atenção: " + esc(at.join(", ")) : "") + ". Eles não alteram os números acima (seção 5).</span></li>";
+      '<li data-s="fora"><i aria-hidden="true"></i><span><b>Especificação ainda não cumprida.</b> Por corte, só ' + c.corte + " de 24 combinações estão na meta de 8% a 12% com confiança estatística; " + c.fraca + " ficam na faixa sem poder estatístico, " + c.inc + " são inconclusivas e " + c.fora + " ficam fora. O P5 não conteve " + c.choques + " (seção 6).</span></li>" +
+      '<li data-s="' + (al.length ? "alerta" : "normal") + '"><i aria-hidden="true"></i><span><b>' + (al.length ? al.length + " gatilhos em alerta:" : "Nenhum gatilho em alerta.") + "</b> " + esc(al.join(", ")) + (at.length ? ". Em atenção: " + esc(at.join(", ")) : "") + ". Eles não alteram os números abaixo (seção 5).</span></li>";
   }
 
   function contagem() {
-    var r = P.backtest.resumo;
-    return {
-      corte: r.filter(function (x) { return x.corte !== "agregado" && x.classe === "na_meta"; }).length,
-      agr: r.filter(function (x) { return x.corte === "agregado" && x.classe === "na_meta"; }).length,
-      inc: r.filter(function (x) { return x.corte !== "agregado" && x.classe === "inconclusivo"; }).length,
-      fora: r.filter(function (x) { return x.corte !== "agregado" && (x.classe === "acima" || x.classe === "abaixo"); }).length
-    };
+    var r = P.backtest.resumo.filter(function (x) { return x.corte !== "agregado"; });
+    var k = function (cl) { return r.filter(function (x) { return cl.indexOf(x.classe) >= 0; }).length; };
+    var ch = [];
+    P.backtest.choques.forEach(function (c) {
+      ATIVOS.forEach(function (a) {
+        var hs = HZ.filter(function (z) { return c.pit[a] && c.pit[a][z] < .05; });
+        if (hs.length) ch.push(c.nome.split(" (")[0] + " em " + NOMES[a] + " (" + hs.join(", ") + " dias)");
+      });
+    });
+    return { corte: k(["na_meta"]), fraca: k(["na_meta_fraca"]), inc: k(["inc_acima", "inc_abaixo"]), fora: k(["acima", "abaixo"]),
+      choques: ch.length ? ch.join(", ") : "nenhum choque" };
   }
 
   /* ---------- seleção de ativo ---------- */
@@ -179,14 +201,14 @@
     el("leque-sub").textContent = "Cada faixa é uma probabilidade, não uma previsão. A linha vermelha é o P1: só 1 em cada 100 trajetórias termina pior que ela. Toque no gráfico para ler um dia; os estresses usam o mesmo eixo da base.";
   }
 
+  /* marcas redondas e fixas no eixo log: 1, 1,2, 1,5, 2, 2,5, 3, 4, 5, 6, 7, 8, 10 × 10^k */
   function niceLog(min, max, n) {
-    var out = [], l0 = Math.log(min), l1 = Math.log(max);
-    for (var i = 0; i < n; i++) {
-      var v = Math.exp(l0 + (l1 - l0) * (i + .5) / n);
-      var m = Math.pow(10, Math.floor(Math.log10(v)) - 1) * (v >= 1e4 ? 5 : 1);
-      out.push(Math.round(v / m) * m);
-    }
-    return out.filter(function (v, i, a) { return a.indexOf(v) === i; });
+    var M = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 10], c = [];
+    for (var e = Math.floor(Math.log10(min)) - 1; e <= Math.ceil(Math.log10(max)); e++)
+      M.forEach(function (m) { var v = m * Math.pow(10, e); if (v >= min && v <= max && c.indexOf(v) < 0) c.push(v); });
+    c.sort(function (x, y) { return x - y; });
+    while (c.length > n) c = c.filter(function (v, i) { return i % 2 === 0; });
+    return c;
   }
 
   function leque() {
@@ -220,7 +242,7 @@
     niceLog(ymin, ymax, estreito ? 5 : 6).forEach(function (v) {
       var y = Y(v);
       s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y + '" y2="' + y + '" style="stroke:var(--hairline)" stroke-width="1"/>';
-      s += '<text x="' + (m.l - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + curto(a, v) + '</text>';
+      s += '<text x="' + (m.l - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + curto(a, v, true) + '</text>';
     });
     // eixo x: início do histórico, hoje e horizontes
     s += '<text x="' + X(x0) + '" y="' + (H - 9) + '" text-anchor="start">' + mesAno(hist[0].t) + '</text>';
@@ -286,7 +308,7 @@
     marcar(estado.dia || 252);
 
     el("legenda").innerHTML =
-      '<span><i style="background:var(--red);height:3px"></i>P1, pior caso plausível</span>' +
+      '<span><i style="background:var(--red);height:3px"></i>' + (D.c ? "P1 do estresse (fora do plausível)" : "P1, pior caso plausível") + '</span>' +
       '<span><i style="background:var(--band-3)"></i>P5 a P1</span>' +
       '<span><i style="background:var(--band-2)"></i>P10 a P5</span>' +
       '<span><i style="background:var(--band-1)"></i>P50 a P10</span>' +
@@ -308,6 +330,26 @@
       v("P1", "P1", "p1") + v("P5", "P5") + v("P10", "P10") + v("P50", "Mediana");
   }
 
+  /* compara um estresse com a base no mesmo ativo, pelos números de 365 dias */
+  function ruimV(a, v) { return a === "usdbrl" ? v : -v; }
+  function comparaBase(c, a) {
+    var hs = c.ativos[a].horizontes["365"], hb = P.base[a].horizontes["365"];
+    var p5s = ruimV(a, hs.P5.var_pct), p5b = ruimV(a, hb.P5.var_pct);
+    var dds = c.ativos[a].drawdown["365"].P50, ddb = P.base[a].drawdown["365"].P50;
+    var anc = ruimV(a, P.ancoras[a].var_pct), p1s = ruimV(a, hs.P1.var_pct);
+    var t;
+    if (p5s < p5b && dds < ddb) t = "Neste ativo, o estresse é mais brando que a base: P5 de " + pct(hs.P5.var_pct, 0) + " contra " + pct(hb.P5.var_pct, 0) + " na base, e queda mediana no caminho de " + pct(-dds, 0) + " contra " + pct(-ddb, 0) + ".";
+    else if (p5s < p5b) t = "A queda mediana no caminho (" + pct(-dds, 0) + ") é maior que a da base (" + pct(-ddb, 0) + "), mas o P5 de 365 dias (" + pct(hs.P5.var_pct, 0) + ") é mais brando que o da base (" + pct(hb.P5.var_pct, 0) + ").";
+    else t = "Neste ativo, o estresse é mais severo que a base: P5 de " + pct(hs.P5.var_pct, 0) + " contra " + pct(hb.P5.var_pct, 0) + ".";
+    t += p1s > anc ? " O P1 do estresse (" + pct(hs.P1.var_pct, 0) + ") passa do pior movimento histórico de 12 meses (" + pct(P.ancoras[a].var_pct, 0) + ") e fica fora do que o painel chama de plausível."
+      : " O P1 do estresse (" + pct(hs.P1.var_pct, 0) + ") não chega ao pior movimento histórico de 12 meses (" + pct(P.ancoras[a].var_pct, 0) + ").";
+    return t;
+  }
+  function maisBrando(c, a) {
+    return ruimV(a, c.ativos[a].horizontes["365"].P5.var_pct) < ruimV(a, P.base[a].horizontes["365"].P5.var_pct) &&
+      c.ativos[a].drawdown["365"].P50 < P.base[a].drawdown["365"].P50;
+  }
+
   function horizontes() {
     var a = estado.ativo, D = dist(), H = D.a[a].horizontes;
     var un = a === "usdbrl" ? "R$ por US$" : a === "btcusd" ? "US$" : "R$";
@@ -323,7 +365,7 @@
     var nota = a === "usdbrl" ? "Para USD/BRL, P10, P5 e P1 são os percentis 90, 95 e 99 da cotação: dólar mais caro."
       : "Para " + NOMES[a] + ", P10, P5 e P1 são os percentis 10, 5 e 1: preço mais baixo.";
     nota += " Datas em dias úteis da PTAX, sem feriados nacionais. " + NOMES[a] + ": " + DESC[a] + ".";
-    if (D.c) nota += " Num estresse, a mediana reproduz a queda máxima do episódio; P5 e P1 somam a esse episódio a volatilidade de hoje e por isso ficam além do pior caso plausível da base.";
+    if (D.c) nota += " " + comparaBase(D.c, a);
     el("nota-quantis").textContent = nota;
   }
 
@@ -333,15 +375,16 @@
     var a = estado.ativo;
     var lbl = a === "usdbrl" ? "a perda máxima do real contra o dólar" : "a queda máxima de " + NOMES[a];
     el("dd-sub").textContent = "Mesmo quando o ponto final se recupera, o caminho pode cair muito antes. Cada célula mostra " + lbl +
-      " desde o pico, até o horizonte. Número grande: a queda que 1 em cada 20 trajetórias ultrapassa (P5). Número pequeno: a mediana. Linhas da mais severa para a menos severa neste ativo.";
-    var linhas = [{ nome: "Distribuição-base", sub: "GARCH-t e camada de crise", d: P.base[a].drawdown }]
-      .concat(porSeveridade(a).map(function (c) {
+      " desde o pico, até o horizonte. Número grande: a queda que 1 em cada 20 trajetórias ultrapassa (P5). Número pequeno: a mediana. Linhas da mais severa para a menos severa neste ativo, pela queda mediana em 365 dias, com a base incluída.";
+    var linhas = [{ nome: "Distribuição-base", sub: "GARCH-t e camada de crise", d: P.base[a].drawdown, base: true }]
+      .concat(P.cenarios.map(function (c) {
         var hd = c.premissas.drawdown_historico[a];
-        return { nome: c.nome + " (" + c.periodo + ")", sub: hd ? "histórico: " + pct(-hd, 0) : c.tipo, d: c.ativos[a].drawdown };
-      }));
+        return { nome: c.nome + " (" + c.periodo + ")", sub: (hd ? "no episódio: " + pct(-hd, 0) : c.tipo) + (a === "btcbrl" ? " · não calibrado" : ""), d: c.ativos[a].drawdown };
+      }))
+      .sort(function (x, y) { return y.d["365"].P50 - x.d["365"].P50; });
     var h = '<div class="heat__cab" aria-hidden="true">' + HZ.map(function (z) { return "<span>" + z + " dias</span>"; }).join("") + "</div>";
     linhas.forEach(function (l) {
-      h += '<div class="heat__linha"><div class="heat__nome">' + esc(l.nome) + '<small>' + esc(l.sub) + '</small></div><div class="heat__cel" role="list">';
+      h += '<div class="heat__linha' + (l.base ? " heat__linha--base" : "") + '"><div class="heat__nome">' + esc(l.nome) + '<small>' + esc(l.sub) + '</small></div><div class="heat__cel" role="list">';
       HZ.forEach(function (z) {
         var v = l.d[z].P5, k = Math.round(6 + 70 * Math.min(1, v / DD_MAX));
         h += '<div role="listitem" class="' + (k > 48 ? "quente" : "") + '" style="background:color-mix(in srgb, var(--red) ' + k + '%, transparent)" aria-label="' + z + " dias: P5 " + pct(-v, 0) + ", mediana " + pct(-l.d[z].P50, 0) + '"><b class="n">' + pct(-v, 0) + '</b><small class="n">' + pct(-l.d[z].P50, 0) + "</small></div>";
@@ -361,9 +404,24 @@
   };
   var SIT = { presente: "Presente hoje", proxima: "Próxima", distante: "Distante", sem_dado: "Sem dado" };
 
+  function pontoRot(c, a) {
+    if (c.tipo !== "reconstruído") return "No pior ponto dos análogos";
+    return a === "btcbrl" ? "Combinação dos dois piores pontos" : "No pior ponto do episódio";
+  }
+  function pontoSub(c, a) {
+    var pr = c.premissas, po = pr.pior_observado;
+    if (!po) return "dia útil " + pr.dias_ate_pior;
+    if (a === "btcbrl") return "pior observado: " + pct(po.btcbrl.pct, 0) + " em " + data(po.btcbrl.data);
+    return data(po[a].data) + ", dia útil " + po[a].dia;
+  }
+
   function cenarios() {
     var a = estado.ativo;
-    el("est-sub").textContent = "Três episódios reconstruídos com dados reais e um cenário construído para 2026–27, aplicados aos preços de hoje. A mediana de cada estresse reproduz a queda máxima que o episódio teve de fato; nenhuma recuperação depois do pior ponto é assumida. Ordem pela queda mediana no caminho de " + NOMES[a] + ". Em “o que precisaria acontecer”, cada condição que foi gatilho no episódio é comparada com hoje pelas mesmas regras da seção 5: no episódio, os 63 dias úteis a partir do início; hoje, os 63 dias úteis até a data-base (Fed Funds e dívida: 12 meses).";
+    el("est-sub").innerHTML = "Três episódios reais e um cenário construído para 2026–27, aplicados aos preços de hoje, do mais severo ao menos severo em " + NOMES[a] + ". A queda mediana de cada estresse é igual à que o episódio teve de fato, e nenhuma recuperação é assumida." +
+      '<details class="mais"><summary>Como os estresses são montados</summary><ul>' +
+      "<li>Cada ativo segue a própria trajetória do episódio até o próprio pior ponto e para ali. Quando os dois piores pontos não foram no mesmo dia, ficam somados: premissa pessimista deliberada.</li>" +
+      "<li>A trajetória histórica é escalada e somada ao ruído do GARCH-t para que a queda mediana no caminho reproduza a do episódio, sem contar a volatilidade duas vezes. BTC/BRL não é calibrado: sai do produto das duas trajetórias.</li>" +
+      "<li>“O que precisaria acontecer” lista só as condições que foram gatilho no episódio e compara com hoje pelas regras da seção 5: no episódio, os 63 dias úteis a partir do início; hoje, os 63 dias úteis até a data-base. Fed Funds e dívida: 12 meses.</li></ul></details>";
     el("cenarios").innerHTML = porSeveridade(a).map(function (c, i) {
       var pr = c.premissas, h = c.ativos[a].horizontes["365"], dd = c.ativos[a].drawdown["365"];
       var hd = pr.drawdown_historico[a];
@@ -371,30 +429,35 @@
         '<div><dt>Mediana em 365 dias</dt><dd class="n">' + moeda(a, h.P50.nivel, true) + "<small>" + varC(a, h.P50.var_pct, 0) + "</small></dd></div>" +
         '<div><dt>Queda mediana no caminho</dt><dd class="n ruim">' + pct(-dd.P50, 0) + "<small>" + (hd ? "no episódio: " + pct(-hd, 0) : "sem episódio próprio") + "</small></dd></div>" +
         '<div><dt>P5 em 365 dias</dt><dd class="n">' + moeda(a, h.P5.nivel, true) + "<small>" + varC(a, h.P5.var_pct, 0) + "</small></dd></div>" +
-        '<div><dt>' + (c.tipo === "reconstruído" ? "No pior ponto conjunto" : "No pior ponto dos análogos") + '</dt><dd class="n">' + varC(a, pr.choque_no_pior_pct[a], 0) + "<small>" + (pr.data_pior ? data(pr.data_pior) + ", dia útil " + pr.dias_ate_pior : "dia útil " + pr.dias_ate_pior) + "</small></dd></div></dl>";
+        '<div><dt>' + pontoRot(c, a) + '</dt><dd class="n">' + varC(a, pr.choque_no_pior_pct[a], 0) + "<small>" + pontoSub(c, a) + "</small></dd></div></dl>";
       var outros = ATIVOS.filter(function (x) { return x !== a; }).map(function (x) {
         return NOMES[x] + " " + varC(x, c.ativos[x].horizontes["365"].P50.var_pct, 0);
       }).join(" · ");
       var co = c.condicoes, anos = co.datas.map(function (d) { return d.slice(0, 4); });
       var conds = co.linhas.map(function (l) {
-        var ep = l.episodio.map(function (v, j) { return (anos.length > 1 ? anos[j] + ": " : "") + (v === null ? "sem dado" : UN[l.id](v)); }).join(" · ");
+        var ep = l.episodio.map(function (v, j) {
+          var tipo = l.id === "selic_real" && co.extra.selic_real_tipo[j] === "ex-post" ? " (ex-post)" : "";
+          return (anos.length > 1 ? anos[j] + ": " : "") + (v === null ? "sem dado" : UN[l.id](v) + tipo);
+        }).join(" · ");
         return '<li><span class="cond__nome">' + esc(l.nome) + '</span><span class="sit" data-s="' + l.situacao + '">' + SIT[l.situacao] + "</span>" +
           '<span class="cond__v">' + (anos.length > 1 ? "Nos análogos" : "No episódio") + ": <b class=\"n\">" + esc(ep) + "</b> · Hoje: <b class=\"n\">" + (l.hoje === null ? "sem dado" : esc(UN[l.id](l.hoje))) + "</b></span></li>";
       }).join("");
       var real = c.historico_real_pct && c.historico_real_pct["365"];
-      var prem = [];
-      prem.push(c.data_inicio_real ? "Início do episódio: " + data(c.data_inicio_real) + ". Pior ponto conjunto em " + data(pr.data_pior) + " (dia útil " + pr.dias_ate_pior + "): a trajetória dos dois ativos é seguida até essa mesma data e fica parada depois." :
+      var prem = [], po = pr.pior_observado;
+      prem.push(c.data_inicio_real ? "Início do episódio: " + data(c.data_inicio_real) + ". Pior ponto do câmbio em " + data(po.usdbrl.data) + " (dia útil " + po.usdbrl.dia + ", dólar " + pct(po.usdbrl.pct, 0) + "); do BTC em " + data(po.btcusd.data) + " (dia útil " + po.btcusd.dia + ", " + pct(po.btcusd.pct, 0) + "). Cada ativo segue a própria trajetória até o próprio pior ponto e fica parado depois. " +
+        (po.usdbrl.dia !== po.btcusd.dia ? "Como os dois piores pontos não foram no mesmo dia, a combinação é mais severa que qualquer dia do episódio: o pior BTC/BRL observado foi " + pct(po.btcbrl.pct, 0) + " em " + data(po.btcbrl.data) + ", contra " + pct(pr.choque_no_pior_pct.btcbrl, 0) + " na combinação. Essa é uma premissa pessimista deliberada." : "") :
         "Análogos com peso de 1/3 cada: " + c.analogos.map(data).join(", ") + ". O câmbio segue a média diária dos três até o pior ponto da média (dia útil " + pr.dias_ate_pior + "). O BTC não tem trajetória própria.");
       prem.push("Mediana calibrada sem dupla contagem: a trajetória histórica entra multiplicada por " + F2.format(pr.m_fx) + " no câmbio" + (c.tipo === "reconstruído" ? " e " + F2.format(pr.m_btc) + " no BTC" : "") +
-        ", somada ao ruído do GARCH-t de hoje (escala " + F2.format(pr.lambda_fx) + " e " + F2.format(pr.lambda_btc) + "), para que a queda mediana no caminho seja igual à do episódio" + (c.tipo === "construído" ? " (média dos análogos)" : "") + ".");
-      prem.push("Volatilidade de partida: a condicional de hoje, " + F0.format(pr.vol_atual_fx * 100) + "% a.a. no câmbio e " + F0.format(pr.vol_atual_btc * 100) + "% a.a. no BTC, que volta à média de longo prazo pelo GARCH. A camada de crise da base não entra nos estresses.");
+        ", somada ao ruído do GARCH-t (escala " + F2.format(pr.lambda_fx) + " no câmbio e " + F2.format(pr.lambda_btc) + " no BTC), para que a queda mediana no caminho seja igual à do episódio" + (c.tipo === "construído" ? " (média dos análogos)" : "") + "." +
+        (pr.m_btc === 0 && c.tipo === "reconstruído" ? " No BTC, a volatilidade sozinha já passava da queda do episódio; por isso a trajetória sai (multiplicador 0) e a escala do ruído é reduzida." : ""));
+      prem.push("Volatilidade de partida: a maior entre a condicional de hoje e a média de longo prazo, " + F0.format(pr.vol_inicial_fx * 100) + "% a.a. no câmbio e " + F0.format(pr.vol_inicial_btc * 100) + "% a.a. no BTC (hoje: " + F0.format(pr.vol_atual_fx * 100) + "% e " + F0.format(pr.vol_atual_btc * 100) + "%). A camada de crise da base não entra nos estresses.");
       prem.push("Correlação real × BTC: " + (pr.rho_episodio !== null ? F2.format(pr.rho_episodio) + " no episódio; " : "sem episódio, parte da de hoje (" + F2.format(pr.rho_hoje) + "); ") + "usada " + F2.format(pr.rho_usado) + ", a maior entre essa e o percentil 95 da janela de 63 dias (" + F2.format(pr.rho_p95_63d) + "), com cópula t de " + F0.format(pr.nu_copula) + " graus de liberdade.");
       if (real) prem.push("O que aconteceu de fato em 365 dias: USD/BRL " + pct(real.usdbrl) + ", BTC/USD " + pct(real.btcusd) + ", BTC/BRL " + pct(real.btcbrl) + ". A recuperação depois do pior ponto não entra no cenário.");
-      prem.push("P5 e P1 do estresse somam o episódio à volatilidade de hoje. Por isso ficam além do pior movimento histórico de 12 meses (" + NOMES[a] + ": " + pct(P.ancoras[a].var_pct, 0) + ", " + mesAno(P.ancoras[a].inicio) + " a " + mesAno(P.ancoras[a].fim) + ") e fora do que o painel chama de plausível.");
+      if (a === "btcbrl") prem.push("BTC/BRL não é calibrado: sai do produto das duas trajetórias simuladas. Por isso a queda mediana no caminho pode diferir da observada no episódio.");
       return '<article class="cen">' +
         '<div class="cen__topo"><span class="cen__ordem">' + (i + 1) + "º para " + NOMES[a] + '</span><span class="cen__tipo">' + esc(c.tipo) + "</span></div>" +
         "<h3>" + esc(c.nome) + " (" + esc(c.periodo) + ")</h3>" + '<p class="cen__resumo">' + esc(c.resumo) + "</p>" +
-        foco + '<p class="cen__outros">Mediana em 365 dias dos outros ativos: ' + outros + ".</p>" +
+        foco + '<p class="cen__compara' + (maisBrando(c, a) ? " cen__compara--brando" : "") + '">' + esc(comparaBase(c, a)) + "</p>" + '<p class="cen__outros">Mediana em 365 dias dos outros ativos: ' + outros + ".</p>" +
         '<h4 class="h3">O que precisaria acontecer</h4>' +
         '<ul class="cond">' + conds + (co.qualitativo ? '<li><span class="cond__nome">Quebras no setor cripto</span><span class="sit" data-s="sem_dado">Sem dado</span><span class="cond__v">' + esc(co.qualitativo) + "</span></li>" : "") + "</ul>" +
         '<details class="mais"><summary>Premissas do cenário</summary><ul>' + prem.map(function (t) { return "<li>" + t + "</li>"; }).join("") + "</ul></details></article>";
@@ -413,26 +476,27 @@
   }
 
   /* ---------- 6. backtest ---------- */
-  var CL = { na_meta: "na meta", inconclusivo: "inconclusivo", acima: "risco subestimado", abaixo: "pessimista demais" };
+  var CL = { na_meta: "na meta", na_meta_fraca: "na faixa, sem poder estatístico", inc_acima: "inconclusivo, acima da meta", inc_abaixo: "inconclusivo, abaixo da meta", acima: "risco subestimado", abaixo: "pessimista demais" };
+  var SETA = { na_meta: "", na_meta_fraca: "", inc_acima: "▲ ", inc_abaixo: "▼ ", acima: "▲ ", abaixo: "▼ " };
   function gradeBT(corte) {
     return '<div class="grade">' + ATIVOS.map(function (a) {
       var n = bt(corte, a, 30);
       return '<div class="grade__linha"><div class="grade__nome">' + NOMES[a] + "<small>" + F0.format(n.n) + " origens</small></div>" +
         '<div class="grade__cel">' + HZ.map(function (z) {
           var x = bt(corte, a, z);
-          return '<div data-c="' + x.classe + '" aria-label="' + z + " dias: " + pctN(x.abaixo_p10) + ", " + CL[x.classe] + '"><span class="h">' + z + 'd</span><b class="n">' + pctN(x.abaixo_p10) + '</b><small class="n">IC ' + F0.format(x.ic95[0] * 100) + "–" + F0.format(x.ic95[1] * 100) + "%<br>~" + x.n_indep + " indep.</small></div>";
+          return '<div data-c="' + x.classe + '" aria-label="' + z + " dias: " + pctN(x.abaixo_p10) + ", " + CL[x.classe] + '"><span class="h">' + z + "d " + SETA[x.classe] + '</span><b class="n">' + pctN(x.abaixo_p10) + '</b><small class="n">IC ' + F0.format(x.ic95[0] * 100) + "–" + F0.format(x.ic95[1] * 100) + "%<br>~" + x.n_indep + " indep.</small></div>";
         }).join("") + "</div></div>";
     }).join("") + "</div>";
   }
   function chave() {
-    return '<ul class="chave"><li><i style="border-color:var(--ok)"></i>Na meta (8% a 12%)</li><li><i></i>Inconclusivo: fora da meta, mas o intervalo de 95% a cruza</li><li><i style="border-color:var(--red);background:var(--red-soft)"></i>Risco subestimado</li><li><i style="border-color:var(--amber)"></i>Pessimista demais</li></ul>';
+    return '<ul class="chave"><li><i style="border-color:var(--ok);background:color-mix(in srgb, var(--ok) 14%, transparent)"></i>Na meta, com intervalo estreito</li><li><i style="border-color:var(--ok)"></i>Na faixa, sem poder estatístico (intervalo com mais de 15 p.p.)</li><li><i style="border-color:var(--secondary)"></i>▲ ▼ Inconclusivo: fora da faixa, mas o intervalo a cruza (▲ acima, ▼ abaixo)</li><li><i style="border-color:var(--red);background:var(--red-soft)"></i>▲ Risco subestimado</li><li><i style="border-color:var(--amber)"></i>▼ Pessimista demais</li></ul>';
   }
   function backtest() {
     var c = contagem();
     el("bt-sub").textContent = "Parâmetros estimados só com dados até 31/12/2017 (corte 2018) e até 31/12/2020 (corte 2021), congelados depois. A cada 5 dias úteis o modelo projetou de novo e comparamos com o que aconteceu. Meta da especificação: o realizado fica pior que o P10 entre 8% e 12% das vezes. Cada célula traz essa frequência, o intervalo de confiança de 95% (Wilson) e o número aproximado de janelas independentes.";
-    el("bt-veredito").innerHTML = "<b>Especificação ainda não cumprida.</b><span>Por corte, " + c.corte + " de 24 combinações estão na meta, " + c.inc + " são inconclusivas e " + c.fora + " ficam fora com significância. Somando os cortes, " + c.agr + " de 12. Os choques da Covid em 30 dias ficaram além do P1, então o P5 não contém todos os choques reais.</span>";
-    el("bt").innerHTML = '<h3 class="h3">Somando os dois cortes</h3>' + gradeBT("agregado") + chave();
-    el("bt-cortes").innerHTML = '<p class="note">Corte 2018: projeções de 2018 a 2020. Corte 2021: projeções de 2021 a 2026.</p><h3 class="h3">Corte 2018</h3>' + gradeBT("2018") + '<h3 class="h3">Corte 2021</h3>' + gradeBT("2021");
+    el("bt-veredito").innerHTML = "<b>Especificação ainda não cumprida.</b><span>Por corte, " + c.corte + " de 24 combinações estão na meta com intervalo estreito, " + c.fraca + " ficam na faixa sem poder estatístico, " + c.inc + " são inconclusivas e " + c.fora + " ficam fora com significância. O P5 não conteve: " + esc(c.choques) + ".</span>";
+    el("bt").innerHTML = chave() + '<p class="note">Corte 2018: parâmetros até 2017, projeções de 2018 a 2020. Corte 2021: parâmetros até 2020, projeções de 2021 a 2026.</p><h3 class="h3">Corte 2018</h3>' + gradeBT("2018") + '<h3 class="h3">Corte 2021</h3>' + gradeBT("2021");
+    el("bt-cortes").innerHTML = '<p class="note">Somar os cortes junta erros de sinal contrário (2018 subestimou o dólar; 2021 foi pessimista demais), por isso este quadro é só complementar.</p>' + gradeBT("agregado");
     var txt = function (v) { return v < .01 ? "pior que o P1" : v < .05 ? "entre P5 e P1" : v < .10 ? "entre P10 e P5" : "melhor que o P10"; };
     el("bt-choques").innerHTML = '<p class="note">Posição do realizado na distribuição projetada às vésperas de cada choque, medida na direção ruim: 0% é o pior extremo e 50% é a mediana. Vermelho: fora do P5.</p>' +
       P.backtest.choques.map(function (ch) {
@@ -493,9 +557,9 @@
       "<div><dt>Focus, câmbio no fim de " + prox + "</dt><dd class=\"n\">" + moeda("usdbrl", R.focus_cambio[prox]) + "</dd></div></dl>" +
       '<p class="note">O forward embute o carrego, não uma expectativa. O Focus é a mediana dos economistas em ' + data(R.focus_data) + ". Nenhum dos dois entra no modelo.</p>";
     el("fontes").innerHTML = P.fontes.map(function (f) {
-      return "<li><b>" + esc(f.serie) + '</b><a href="' + esc(f.url) + '" rel="noopener">' + esc(f.fonte) + "</a><span>Último dado " + data(f.ultimo_dado) + " · coletado em " + esc(f.coletado_em.replace("T", " ").replace("+00:00", " UTC")) + "</span></li>";
+      return "<li><b>" + esc(f.serie) + '</b><a href="' + esc(f.url) + '" rel="noopener">' + esc(f.fonte) + "</a><span>Último dado " + (f.mensal ? mesAno4(f.ultimo_dado) : data(f.ultimo_dado)) + " · coletado em " + dataHora(f.coletado_em) + "</span></li>";
     }).join("");
-    el("rodape-data").textContent = "Gerado em " + P.gerado_em.replace("T", " ").replace("+00:00", " UTC") + " · dados até " + data(P.data_base);
+    el("rodape-data").textContent = "Gerado em " + dataHora(P.gerado_em) + " · dados até " + data(P.data_base);
   }
 
   function iniciar(dados) {
