@@ -1,0 +1,5 @@
+data/raw/focus_anuais.json
+data/raw/tesouro_direto.json
+artifact/
+__pycache__/
+*.pyc
