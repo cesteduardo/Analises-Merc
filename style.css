@@ -179,9 +179,9 @@ h3 { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.3; }
 
 /* ---------- Estrutura ---------- */
 .shell {
-  width: 100%; max-width: 1040px; margin: 0 auto;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  width: 100%; max-width: 1760px; margin: 0 auto;
+  padding-left: max(clamp(16px, 2.6vw, 48px), env(safe-area-inset-left, 0px));
+  padding-right: max(clamp(16px, 2.6vw, 48px), env(safe-area-inset-right, 0px));
   padding-block: 12px 16px;
   display: flex; flex-direction: column; gap: 12px;
 }
@@ -367,11 +367,13 @@ td small, th small { display: block; font-size: 11.5px; color: var(--tertiary); 
 .precisaria td.dist[data-v="perto"] { color: var(--red); }
 .precisaria td.dist[data-v="longe"] { color: var(--ok); }
 .unid { display: block; font-size: 10px; letter-spacing: .08em; text-transform: none; }
-/* tabela "o que precisaria acontecer" em pilha no celular */
+/* tabela "o que precisaria acontecer" em pilha: cabe em qualquer cartão */
+.precisaria thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.precisaria tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 12px; padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+.precisaria th, .precisaria td { border: 0; padding: 0; text-align: left; font-size: 12.5px; }
+.precisaria tbody th { grid-column: 1 / -1; color: var(--primary); font-weight: 500; font-size: 13.5px; margin-bottom: 2px; }
+.precisaria td::before { content: attr(data-rot); display: block; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--tertiary); margin-bottom: 2px; }
 @media (max-width: 559px) {
-  .precisaria thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .precisaria tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 10px; padding: 10px 0; border-bottom: 1px solid var(--hairline); }
-  .precisaria td { font-size: 12.5px; }
   .quantis .long { display: none; }
   .quantis th, .quantis td { padding: 7px 3px; }
   .quantis td { font-size: 12.5px; }
@@ -387,9 +389,6 @@ td small, th small { display: block; font-size: 11.5px; color: var(--tertiary); 
   .fontes__t td:nth-child(1), .fontes__t td:nth-child(2) { grid-column: 1 / -1; }
   .fontes__t td:nth-child(1) { color: var(--primary); font-weight: 500; }
   .fontes__t td:nth-child(n+3)::before { content: attr(data-rot); display: block; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--tertiary); }
-  .precisaria th, .precisaria td { border: 0; padding: 0; text-align: left; }
-  .precisaria tbody th { grid-column: 1 / -1; color: var(--primary); font-weight: 500; }
-  .precisaria td::before { content: attr(data-rot); display: block; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--tertiary); margin-bottom: 2px; }
 }
 @media (min-width: 560px) {
   .ctrl span:last-child { display: inline; }
@@ -418,6 +417,48 @@ td small, th small { display: block; font-size: 11.5px; color: var(--tertiary); 
   .gat { grid-template-columns: 200px minmax(0, 1fr); column-gap: 24px; }
   .gat__topo { flex-direction: column; align-items: flex-start; gap: 8px; }
   .footbar { border-radius: var(--radius-pill); padding: 14px 24px; }
+}
+
+/* ---------- Telas largas: usar a largura do monitor ---------- */
+.fileira { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.bt-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+.bt-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.hero__topo { display: flex; flex-direction: column; gap: 20px; }
+.hero__rodape { display: flex; flex-direction: column; gap: 16px; }
+@media (min-width: 1100px) {
+  .shell { gap: 14px; padding-block: 18px 22px; }
+  .main { gap: 14px; }
+  .panel { padding: 40px clamp(32px, 3vw, 56px); gap: 28px; }
+  .hero { padding-block: 52px 44px; gap: 32px; }
+  .heading { font-size: clamp(34px, 2.6vw, 46px); max-width: 32ch; line-height: 1.14; }
+  h2 { font-size: clamp(21px, 1.4vw, 25px); }
+  .sub { font-size: 16px; max-width: 80ch; }
+  .tile { padding: 22px 24px 20px; border-radius: 24px; }
+  .tile__p1 { font-size: clamp(34px, 2.6vw, 46px); }
+  .tile__escada dd { font-size: 15px; }
+  .hero__topo { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 56px; align-items: center; }
+  .hero__rodape .selo { flex-direction: column; align-items: stretch; }
+  .hero__rodape .chip { font-size: 13px; padding: 12px 16px; }
+  .note { font-size: 13.5px; }
+  .fileira { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .fileira .gat { grid-template-columns: minmax(0, 1fr); }
+  .fileira .gat__topo { flex-direction: row; align-items: center; }
+  .bt-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 40px; align-items: start; }
+  .premissas { columns: 2; column-gap: 48px; max-width: none; display: block; }
+  .premissas li { break-inside: avoid; margin-bottom: 10px; }
+  .controles .select { flex: 0 1 520px; }
+  .controles { justify-content: flex-start; }
+}
+@media (min-width: 1280px) {
+  .leques { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 40px; align-items: start; }
+  .fan { border-top: 0; padding-top: 0; }
+  .fan + .fan { border-left: 1px solid var(--hairline); padding-left: 40px; margin-left: -1px; }
+  .fan .leitura { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cenarios { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1560px) {
+  .cenarios { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .fileira { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

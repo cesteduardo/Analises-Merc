@@ -27,10 +27,14 @@
     <!-- 1. Pior caso plausível -->
     <section class="panel glass hero" aria-labelledby="h-hero">
       <p class="eyebrow" id="hero-data">Carregando dados…</p>
-      <h1 class="heading" id="h-hero">Projeções deliberadamente pessimistas do dólar e do bitcoin, lidas do pior caso plausível para o mediano<span class="dot">.</span></h1>
+      <div class="hero__topo">
+        <h1 class="heading" id="h-hero">Projeções deliberadamente pessimistas do dólar e do bitcoin, lidas do pior caso plausível para o mediano<span class="dot">.</span></h1>
+        <div class="hero__rodape">
+          <div class="selo" id="selo"></div>
+          <p class="note" id="hero-nota"></p>
+        </div>
+      </div>
       <div class="tiles" id="tiles" aria-live="polite"></div>
-      <p class="note" id="hero-nota"></p>
-      <div class="selo" id="selo"></div>
     </section>
 
     <!-- 2. Leques -->
@@ -50,24 +54,6 @@
       <p class="note" id="nota-quantis"></p>
     </section>
 
-    <!-- 3. Drawdown -->
-    <section class="panel glass" aria-labelledby="h-dd">
-      <div class="head">
-        <p class="eyebrow">Queda máxima no caminho</p>
-        <h2 id="h-dd">Mapa de calor do drawdown máximo por horizonte</h2>
-        <p class="sub" id="dd-sub">Mesmo quando o ponto final se recupera, o caminho pode cair muito antes. Cada célula mostra a queda máxima desde o pico que 1 em cada 20 trajetórias ultrapassa (P5); abaixo, a mediana.</p>
-      </div>
-      <div class="seg glass" role="group" aria-label="Ativo do mapa" data-grupo="ativo-heat">
-        <button class="seg__btn label" type="button" data-ativo="usdbrl" aria-pressed="true">USD/BRL</button>
-        <button class="seg__btn label" type="button" data-ativo="btcusd" aria-pressed="false">BTC/USD</button>
-        <button class="seg__btn label" type="button" data-ativo="btcbrl" aria-pressed="false">BTC/BRL</button>
-      </div>
-      <p class="caption" id="heat-cap"></p>
-      <div class="table-wrap">
-        <table class="heat" id="heat"></table>
-      </div>
-      <div class="escala" id="escala" aria-hidden="true"></div>
-    </section>
 
     <!-- 4. Estresses -->
     <section class="panel glass" aria-labelledby="h-est">
@@ -78,15 +64,35 @@
       </div>
       <div class="cenarios" id="cenarios"></div>
     </section>
+    <div class="fileira">
+      <!-- 3. Drawdown -->
+      <section class="panel glass" aria-labelledby="h-dd">
+        <div class="head">
+          <p class="eyebrow">Queda máxima no caminho</p>
+          <h2 id="h-dd">Mapa de calor do drawdown máximo por horizonte</h2>
+          <p class="sub" id="dd-sub">Mesmo quando o ponto final se recupera, o caminho pode cair muito antes. Cada célula mostra a queda máxima desde o pico que 1 em cada 20 trajetórias ultrapassa (P5); abaixo, a mediana.</p>
+        </div>
+        <div class="seg glass" role="group" aria-label="Ativo do mapa" data-grupo="ativo-heat">
+          <button class="seg__btn label" type="button" data-ativo="usdbrl" aria-pressed="true">USD/BRL</button>
+          <button class="seg__btn label" type="button" data-ativo="btcusd" aria-pressed="false">BTC/USD</button>
+          <button class="seg__btn label" type="button" data-ativo="btcbrl" aria-pressed="false">BTC/BRL</button>
+        </div>
+        <p class="caption" id="heat-cap"></p>
+        <div class="table-wrap">
+          <table class="heat" id="heat"></table>
+        </div>
+        <div class="escala" id="escala" aria-hidden="true"></div>
+      </section>
+      <!-- 5. Gatilhos -->
+      <section class="panel glass" aria-labelledby="h-gat">
+        <div class="head">
+          <p class="eyebrow">Monitorados a cada atualização</p>
+          <h2 id="h-gat">Gatilhos de risco hoje</h2>
+        </div>
+        <ul class="gatilhos" id="gatilhos"></ul>
+      </section>
+    </div>
 
-    <!-- 5. Gatilhos -->
-    <section class="panel glass" aria-labelledby="h-gat">
-      <div class="head">
-        <p class="eyebrow">Monitorados a cada atualização</p>
-        <h2 id="h-gat">Gatilhos de risco hoje</h2>
-      </div>
-      <ul class="gatilhos" id="gatilhos"></ul>
-    </section>
 
     <!-- 6. Backtest -->
     <section class="panel glass" aria-labelledby="h-bt">
@@ -96,19 +102,25 @@
         <p class="sub" id="bt-sub"></p>
       </div>
       <ul class="veredito" id="bt-veredito"></ul>
-      <p class="caption" id="bt-cap"></p>
-      <div class="table-wrap">
-        <table class="bt" id="bt"></table>
+      <div class="bt-grid">
+        <div class="bt-col">
+          <p class="caption" id="bt-cap"></p>
+          <div class="table-wrap">
+            <table class="bt" id="bt"></table>
+          </div>
+          <details class="fontes">
+            <summary class="label">Cada corte separado</summary>
+            <div class="bt-cortes" id="bt-cortes"></div>
+          </details>
+          <p class="note" id="bt-nota"></p>
+        </div>
+        <div class="bt-col">
+          <p class="caption" id="ch-cap"></p>
+          <div class="table-wrap">
+            <table class="bt" id="bt-choques"></table>
+          </div>
+        </div>
       </div>
-      <details class="fontes">
-        <summary class="label">Cada corte separado</summary>
-        <div class="bt-cortes" id="bt-cortes"></div>
-      </details>
-      <p class="caption" id="ch-cap"></p>
-      <div class="table-wrap">
-        <table class="bt" id="bt-choques"></table>
-      </div>
-      <p class="note" id="bt-nota"></p>
     </section>
 
     <!-- 7. Método e fontes -->

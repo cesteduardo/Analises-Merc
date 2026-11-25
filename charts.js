@@ -85,7 +85,7 @@
     el("tiles").innerHTML = html;
     var mo = P.modelo;
     el("hero-nota").textContent = "Pior, aqui, é o dólar mais caro e o bitcoin mais barato. P1, P5 e P10 são os níveis que têm 1%, 5% e 10% de probabilidade estimada de ser ultrapassados nessa direção; P50 é a mediana. Os dois P1 são de cada ativo isolado: acontecerem juntos tem probabilidade de " +
-      (mo.prob_p1_conjunto_365d < .001 ? "menos de 0,1%" : F2.format(mo.prob_p1_conjunto_365d * 100) + "%") + " nas mesmas trajetórias (" + F0.format(mo.prob_p1_conjunto_365d * mo.n_trajetorias) + " de " + F0.format(mo.n_trajetorias) + "). Para o câmbio, a probabilidade de 1% já inclui a recalibração da cauda: na simulação bruta, o P1 exibido corresponde a " + F2.format(mo.prob_p1_marginal_simulada_365d.usdbrl * 100) + "% das trajetórias. BTC/BRL é sempre BTC/USD × USD/BRL na mesma trajetória.";
+      F2.format(mo.prob_p1_conjunto_365d * 100) + "%" + " nas mesmas trajetórias (" + F0.format(mo.prob_p1_conjunto_365d * mo.n_trajetorias) + " de " + F0.format(mo.n_trajetorias) + "). Para o câmbio, a probabilidade de 1% já inclui a recalibração da cauda: na simulação bruta, o P1 exibido corresponde a " + F2.format(mo.prob_p1_marginal_simulada_365d.usdbrl * 100) + "% das trajetórias. BTC/BRL é sempre BTC/USD × USD/BRL na mesma trajetória.";
     // selos de estado
     var v = veredito();
     var alertas = P.gatilhos.filter(function (g) { return g.status === "alerta"; }).map(function (g) { return g.nome; });
@@ -167,8 +167,8 @@
   function desenharLeque(a, D) {
     var L = D.a[a].leque;
     var box = el("svg-" + a), W = Math.max(300, Math.round(box.clientWidth || 640));
-    var estreito = W < 560;
-    var H = estreito ? 250 : 300;
+    var estreito = W < 420;
+    var H = estreito ? 250 : Math.round(Math.min(340, Math.max(280, W * .6)));
     var m = { l: estreito ? 46 : 58, r: estreito ? 64 : 88, t: 12, b: 28 };
     var hist = P.historico.slice(-(estreito ? 90 : 130));
     var nh = hist.length, x0 = -(nh - 1), x1 = 252;
@@ -493,7 +493,7 @@
       "<b>Correlação</b> entre os choques do real e do BTC por cópula t: " + F2.format(mo.rho_250d) + " na janela de 250 dias. Nos estresses, sobe para pelo menos " + F2.format(mo.rho_estresse_p95_63d) + " (percentil 95 da janela de 63 dias) com cópula de " + F0.format(mo.nu_copula_estresse) + " graus de liberdade, que junta as caudas.",
       "<b>BTC/BRL nunca é projetado sozinho</b>: em cada trajetória, BTC/BRL = BTC/USD × USD/BRL.",
       "<b>Sem previsão pontual</b>: toda saída é distribuição (P50, P10, P5, P1), e o P90 aparece só como referência do lado favorável.",
-      "<b>Risk-off conjunto</b> na base, em 365 dias: USD/BRL sobe mais de 10% e BTC/USD cai mais de 30% ao mesmo tempo em " + pct(mo.prob_riskoff_conjunto_365d).replace("+", "") + " das trajetórias (simulação sem recalibração). Os dois P1 juntos: " + F2.format(mo.prob_p1_conjunto_365d * 100) + "%.",
+      "<b>Risk-off conjunto</b> na base, em 365 dias: USD/BRL sobe mais de 10% e BTC/USD cai mais de 30% ao mesmo tempo em " + pct(mo.prob_riskoff_conjunto_365d).replace("+", "") + " das trajetórias (simulação sem recalibração). Os dois P1 juntos: " + F2.format(mo.prob_p1_conjunto_365d * 100) + "% (" + F0.format(mo.prob_p1_conjunto_365d * mo.n_trajetorias) + " de " + F0.format(mo.n_trajetorias) + " trajetórias).",
       "<b>Estresses</b>: a mediana repete o episódio dia a dia até o pior ponto, sem recuperação; a dispersão em volta é metade da volatilidade do episódio (premissa) e a cauda não é recalibrada."
     ];
     el("premissas").innerHTML = itens.filter(Boolean).map(function (t) { return "<li>" + t + "</li>"; }).join("");
