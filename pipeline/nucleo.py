@@ -259,3 +259,40 @@ def simular_com_crise(g, s2_0, eps, mu, crise, rng, ativo=True):
         x[:, t] = mu[t] + e + np.where(em, d, 0.0) + np.where(dev, dv, 0.0)
         s2 = g.omega + (g.alpha + g.gamma * (e < 0)) * e * e + g.beta * s2
     return x
+
+
+def juro_real_expost(idx):
+    """Selic meta deflacionada pelo IPCA acumulado em 12 meses (ex-post, % a.a.),
+    alinhada a `idx`. O IPCA de um mês só é usado a partir do dia 15 do mês
+    seguinte, quando já foi divulgado. Usamos o ex-post porque o Focus de 12
+    meses coletado começa em 2014 e o ajuste do câmbio começa em 2003."""
+    selic, _ = serie("selic_meta")
+    ipca, _ = serie("ipca_12m")
+    ip = ipca.copy()
+    ip.index = ip.index + pd.offsets.MonthEnd(1) + pd.Timedelta(days=15)
+    s = selic.reindex(idx, method="ffill")
+    i = ip.reindex(idx, method="ffill")
+    return ((1 + s / 100) / (1 + i / 100) - 1) * 100
+
+
+def ajustar_deriva_juro_real(x, rr, fim, h=63):
+    """Regressão do retorno do real nos `h` dias úteis seguintes sobre o juro
+    real ex-post, só com janelas que terminam até `fim` (sem olhar o futuro).
+    Devolve intercepto, inclinação, estatísticas t (Newey-West) e o juro real
+    neutro (em que a deriva é zero)."""
+    import statsmodels.api as sm
+    fwd = x[::-1].rolling(h).sum()[::-1].shift(-1)
+    d = pd.DataFrame({"y": fwd, "r": rr}).dropna()
+    d = d[d.index <= pd.Timestamp(fim) - pd.tseries.offsets.BDay(h + 1)]
+    d = d[d.index >= "2003-01-01"]
+    m = sm.OLS(d.y, sm.add_constant(d.r)).fit(cov_type="HAC", cov_kwds={"maxlags": h})
+    a, b = float(m.params["const"]), float(m.params["r"])
+    return dict(intercepto=a, inclinacao=b, t_intercepto=float(m.tvalues["const"]),
+                t_inclinacao=float(m.tvalues["r"]), r2=float(m.rsquared), h=h,
+                juro_neutro=-a / b if b else None, n=int(len(d)),
+                amostra=[str(d.index[0].date()), str(d.index[-1].date())])
+
+
+def deriva_juro_real(reg, r):
+    """Deriva diária do retorno do real dada a regressão e o juro real atual."""
+    return (reg["intercepto"] + reg["inclinacao"] * r) / reg["h"]

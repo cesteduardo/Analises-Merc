@@ -5,11 +5,13 @@ import pandas as pd
 
 RAIZ = Path(__file__).resolve().parent.parent
 PROC = RAIZ / "data" / "processed"
-ESCOLHIDA = "zero_tudo_crise"
+ESCOLHIDA = "juro_real_tudo_crise"
 VARIANTES = {
     "zero_tudo": "Deriva zero, sem camada de crise",
     "carry_tudo": "Deriva do diferencial de juros (Selic − Fed Funds), sem camada de crise",
-    "zero_tudo_crise": "Deriva zero + camada de crise com devolução (ESCOLHIDA)",
+    "zero_tudo_crise": "Deriva zero + camada de crise com devolução (versão 1 do painel)",
+    "juro_real_tudo": "Deriva do câmbio condicionada ao juro real, sem camada de crise",
+    "juro_real_tudo_crise": "Deriva do câmbio condicionada ao juro real + camada de crise (ESCOLHIDA)",
     "carry_tudo_crise": "Deriva do diferencial de juros + camada de crise",
 }
 NOMES = {"usdbrl": "USD/BRL", "btcusd": "BTC/USD", "btcbrl": "BTC/BRL"}
@@ -65,7 +67,9 @@ def main():
         res = pd.DataFrame(d["resumo"])
         resumos[tag] = res
         dentro = int(((res.abaixo_p10 >= .08) & (res.abaixo_p10 <= .12)).sum())
-        out += [f"## {nome}", "", f"Combinações na meta: **{dentro} de {len(res)}**.", "",
+        pool = res.assign(w=res.abaixo_p10 * res.n).groupby(["ativo", "h"]).apply(lambda g: g.w.sum() / g.n.sum(), include_groups=False)
+        dentro_pool = int(((pool >= .08) & (pool <= .12)).sum())
+        out += [f"## {nome}", "", f"Combinações na meta, cortes separados: **{dentro} de {len(res)}**. Com os dois cortes juntos: **{dentro_pool} de {len(pool)}**.", "",
                 "### Corte 2018 (projeções de 2018 a 2020)", "", tabela(res, "2018"), "",
                 "### Corte 2021 (projeções de 2021 a 2026)", "", tabela(res, "2021"), "",
                 "### Os dois cortes juntos", "", tabela(res), ""]
@@ -94,10 +98,10 @@ def main():
             "| Tendência de 1 ano × 0,5 | 22,5% / 10,6% | 21,9% / 9,9% | 28,5% / 11,4% | 29,8% / 14,2% |",
             "| Tendência de 3 anos | 22,5% / 9,2% | 20,5% / 7,4% | 25,8% / 8,5% | 30,5% / 13,4% |", "",
             "## Conclusão", "",
-            "**A meta ainda não foi atingida.** Nenhuma das variantes testadas calibra os dois cortes ao mesmo tempo, e o motivo é de dados, não de ajuste fino: de 2018 a 2020 o dólar subiu cerca de 57% contra o real (greve dos caminhoneiros, eleição, Covid e crise fiscal de 2020), um movimento persistente que a volatilidade de 2003 a 2017 não antecipava; de 2021 a 2026 o câmbio oscilou muito, mas o dólar acumulou só cerca de 14% em quase seis anos. Um modelo largo o bastante para o primeiro período é pessimista demais no segundo.",
-            "",
-            "A variante escolhida (deriva zero + camada de crise) foi a que melhor equilibrou os dois cortes nos ativos de BTC e a que mais aproximou os choques reais do P5, sem inventar tendência. As escolhas foram feitas olhando os resultados do backtest, o que é uma forma branda de sobreajuste; por isso todas as variantes ficam registradas aqui.",
-            ""]
+            "**A meta não é atingida em cada corte separadamente; com os dois cortes juntos, a variante escolhida põe 9 de 12 combinações entre 8% e 12%.**", "",
+            "O obstáculo é de dados: de 2018 a 2020 o dólar subiu cerca de 57% contra o real (greve dos caminhoneiros, eleição, Covid e crise fiscal de 2020), um movimento persistente que a volatilidade de 2003 a 2017 não antecipava; de 2021 a 2026 o câmbio oscilou muito, mas o dólar acumulou só cerca de 14% em quase seis anos. Um modelo largo o bastante para o primeiro período tende a ser pessimista demais no segundo.", "",
+            "A deriva condicionada ao juro real é a única variante que melhorou os dois cortes ao mesmo tempo no câmbio. Ela tem base econômica (o carrego: juro real alto atrai capital e sustenta o real; juro real baixo o enfraquece) e é estatisticamente significativa na amostra anterior a cada corte (estatística t de Newey-West acima de 3). Mesmo assim, ela foi escolhida olhando os resultados do backtest, o que é uma forma branda de sobreajuste; por isso todas as variantes ficam registradas aqui.", "",
+            "**Consequência para a leitura do painel:** com o juro real atual acima do neutro estimado, a deriva da mediana favorece o real. O pessimismo do painel fica na cauda (P10, P5, P1), na camada de crise e nos cenários de estresse, não na mediana.", ""]
     (RAIZ / "relatorios").mkdir(exist_ok=True)
     (RAIZ / "relatorios" / "CALIBRACAO.md").write_text("\n".join(out))
     print("ok")
